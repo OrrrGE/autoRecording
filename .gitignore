@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Recording and rendering output
+work/
+dist/
+frames/
+parts/
+*.mp4
+*.mov
+*.wav
+*.jpg
+*.jpeg
+
+# Local models and caches
+models/
+.cache/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.log
