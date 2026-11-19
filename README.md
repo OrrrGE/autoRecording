@@ -101,7 +101,6 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest      # 需要显卡和语音
 [`references/narration.md`](references/narration.md)，安装见
 [`references/environment.md`](references/environment.md)。
 
-> 用临时实例和示例数据录制。画面帧是真实截图，不要把 `work/` 提交到仓库。
 
 </details>
 
