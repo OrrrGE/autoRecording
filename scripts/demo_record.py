@@ -34,10 +34,10 @@ from urllib.parse import urlsplit
 import httpx
 from playwright.async_api import async_playwright
 
-from demo_common import PAUSES, spoken, syllables, where
+import demo_text
+from demo_common import WINDOWS, browsers, where
 
 SHAPE = 1920 / 930   # the page's shape, width to height: what the picture has between its two bands (demo_render.py)
-BROWSERS = ['/snap/bin/chromium', 'chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable', 'microsoft-edge']
 
 SCROLL_PAGE = """([top, ms]) => new Promise(done => {
   const from = scrollY, t0 = performance.now();
@@ -180,13 +180,9 @@ def shot(rect, most, pad, view):
     return [round(left, 1), round(top, 1), round(width, 1), round(height, 1)]
 
 
-def reading_time(text, a_second=5.5, say=None):
-    """How long a caption is given before the next thing happens: long enough to be read, and to be read aloud."""
-    wide = sum(1 for ch in text if 0x2E80 <= ord(ch) <= 0x9FFF or 0xF900 <= ord(ch) <= 0xFAFF or 0xFF00 <= ord(ch) <= 0xFFEF)  # Chinese characters and their punctuation
-    if 2 * wide >= len(text.replace(' ', '')):  # Chinese: by its characters, or by what saying it takes where numbers and letters make that longer
-        said = spoken(text, say)
-        return 1.2 + max(len(text), syllables(said) + sum(said.count(mark) for mark in PAUSES)) / a_second
-    return 1.2 + len(text.split()) / (a_second / 2.1)  # words: about 155 a minute
+def reading_time(text, a_second=None, say=None, tongue=None):
+    """How long a caption is given before the next thing happens: long enough to be read, and to be read aloud (demo_text)."""
+    return demo_text.reading_time(text, tongue, a_second, say)
 
 
 class Director:
@@ -198,7 +194,8 @@ class Director:
         self.page, self.rec, self.api, self.work, self.url, self.view, self.quick = page, rec, api, work, url, tuple(view), quick
         self.pointer, self.camera, self.read_until, self.facts, self.tight = [round(view[0] * 0.727), round(view[1] * 0.532)], [0, 0, *view], 0.0, {}, []
         self.lowest = None  # when set (an async function): gives how far down the page may be scrolled at most
-        self.reading = 5.5  # characters a second a caption is given (READING in the story file)
+        self.tongue = 'zh'  # the language of the captions (LANGUAGE in the story file): how they are counted, and what says them
+        self.reading = 5.5  # syllables a second a caption is given (READING in the story file; 5.5 characters a second for Mandarin)
         self.say_as = {}    # how the narration says what its rules get wrong (VOICE['say'] in the story file): such captions are given the time that takes
 
     @staticmethod
@@ -228,7 +225,7 @@ class Director:
         await self.read()
         self.rec.add('caption', text=text)
         print(f'{self.rec.clock.now():7.1f}  {text}', flush=True)
-        self.read_until = self.rec.clock.now() + reading_time(text, self.reading, self.say_as)
+        self.read_until = self.rec.clock.now() + reading_time(text, self.reading, self.say_as, self.tongue)
 
     async def hush(self):
         await self.read()
@@ -431,7 +428,13 @@ async def answering(api, address, seconds, server):
 
 
 def stop(server):
+    """Stop the throwaway app and whatever it started."""
     if not server or server.poll() is not None:
+        return
+    if WINDOWS:  # no process groups to signal: the whole tree goes at once
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(server.pid)], capture_output=True)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            server.wait(timeout=15)
         return
     with contextlib.suppress(ProcessLookupError):
         os.killpg(server.pid, signal.SIGTERM)  # it was started as the head of its own group: what it started goes with it
@@ -445,7 +448,7 @@ def stop(server):
 async def browser_for(playwright, density):
     """The browser named in the settings; else the one Playwright brought, else one of the system."""
     named = where('chromium')
-    choices = [str(named)] if named else [None] + [path for path in (name if name.startswith('/') and Path(name).exists() else shutil.which(name) for name in BROWSERS) if path]
+    choices = [str(named)] if named else [None] + browsers()
     failed = []
     for path in choices:
         try:
@@ -459,6 +462,7 @@ async def browser_for(playwright, density):
 async def record(story_file: Path, work: Path, quick: bool):
     story = load(story_file)
     view, density, port = tuple(getattr(story, 'VIEW', (1280, 620))), float(getattr(story, 'DENSITY', 2.5)), int(getattr(story, 'PORT', 8791))
+    tongue = demo_text.language(getattr(story, 'LANGUAGE', None)) or demo_text.language(getattr(story, 'LOCALE', 'zh-CN')) or demo_text.guess([story.TITLE, *getattr(story, 'CHAPTERS', [])])
     if abs(view[0] / view[1] - SHAPE) > 0.004:
         raise SystemExit(f'VIEW 的宽高比要是 64:31（如 1280×620、1536×744、1600×775、1920×930），现在是 {view[0]}×{view[1]}')
     if (view[0] + 40) * density > 4096:
@@ -478,9 +482,10 @@ async def record(story_file: Path, work: Path, quick: bool):
         if plan.get('command'):
             if listening(port):
                 raise SystemExit(f'端口 {port} 上已经有服务在跑，它不是这次录制启动的。换一个端口（故事文件里的 PORT），不要去停别人的服务')
-            with open(work / 'server.log', 'w') as log:
-                server = subprocess.Popen([str(part) for part in plan['command']], cwd=plan.get('cwd'), stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-                                          env={**os.environ, **{key: str(value) for key, value in (plan.get('env') or {}).items()}})
+            with open(work / 'server.log', 'w', encoding='utf-8', errors='replace') as log:
+                server = subprocess.Popen([str(part) for part in plan['command']], cwd=plan.get('cwd'), stdout=log, stderr=subprocess.STDOUT,
+                                          env={**os.environ, **{key: str(value) for key, value in (plan.get('env') or {}).items()}},
+                                          **({'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW} if WINDOWS else {'start_new_session': True}))
         if served:
             await answering(api, plan.get('ready') or url, plan.get('timeout', 60), server)
         async with async_playwright() as playwright:
@@ -501,12 +506,13 @@ async def record(story_file: Path, work: Path, quick: bool):
                     raise SystemExit(f'页面宽 {wide}，预想的是 {view[0]}，镜头会对不准')
             else:
                 gutter = 0
-            about = {'title': story.TITLE, 'subtitle': getattr(story, 'SUBTITLE', ''), 'look': getattr(story, 'LOOK', {}), 'voice': getattr(story, 'VOICE', {}),
-                     'view': list(view), 'density': density, 'chapters': list(story.CHAPTERS),
+            about = {'title': story.TITLE, 'subtitle': getattr(story, 'SUBTITLE', ''), 'look': getattr(story, 'LOOK', {}), 'voice': dict(getattr(story, 'VOICE', {}) or {}, language=tongue),
+                     'language': tongue, 'view': list(view), 'density': density, 'chapters': list(story.CHAPTERS),
                      'recorded': {'story': str(story_file), 'quick': quick, 'browser': used, 'gutter': gutter, 'at': time.strftime('%Y-%m-%d %H:%M')}}
             rec = Recorder(await context.new_cdp_session(page), work / 'frames', about)
             director = Director(page, rec, api, work, url, view, quick)
-            director.reading, director.say_as = float(getattr(story, 'READING', 5.5)), dict(getattr(story, 'VOICE', {}).get('say') or {})
+            director.tongue, director.say_as = tongue, dict(getattr(story, 'VOICE', {}).get('say') or {})
+            director.reading = float(story.READING) if hasattr(story, 'READING') else demo_text.LANGUAGES[tongue]['reading']
             try:
                 if hasattr(story, 'guard'):
                     await story.guard(director)

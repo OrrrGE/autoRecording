@@ -41,8 +41,13 @@ FAST = '快进'                     # what the band says while waiting is played
 FADE = 0.18
 NO_BREAK_BEFORE, NO_BREAK_AFTER, PAUSES = '，。、；：！？”’）》」…,.;:!?)', '“‘（《「(', '，。；：！？,.;:!?'
 FONT_FOLDERS = ['/usr/share/fonts/opentype/noto', '/usr/share/fonts/noto-cjk', '/usr/share/fonts/google-noto-cjk', '/usr/share/fonts/opentype/noto-cjk',
-                '/usr/share/fonts/truetype/noto', '/usr/local/share/fonts', '~/.local/share/fonts', '~/.fonts', '/Library/Fonts', '~/Library/Fonts']
+                '/usr/share/fonts/truetype/noto', '/usr/local/share/fonts', '~/.local/share/fonts', '~/.fonts', '/System/Library/Fonts', '/Library/Fonts', '~/Library/Fonts',
+                'C:/Windows/Fonts', '~/AppData/Local/Microsoft/Windows/Fonts']
 FONT_NAMES = ['NotoSansCJK-{}.ttc', 'NotoSansCJKsc-{}.otf', 'NotoSansSC-{}.otf', 'NotoSansSC-{}.ttf', 'SourceHanSansSC-{}.otf', 'SourceHanSansCN-{}.otf']
+# when neither Noto nor Source Han is installed: the Chinese faces the system itself has (Windows: Microsoft YaHei; macOS: PingFang SC, Hiragino)
+PLATFORM_FONTS = {'Bold': ['msyhbd.ttc', 'Dengb.ttf', 'simhei.ttf', 'PingFang.ttc', 'Hiragino Sans GB.ttc', 'STHeiti Medium.ttc'],
+                  'Medium': ['msyh.ttc', 'Deng.ttf', 'simhei.ttf', 'PingFang.ttc', 'Hiragino Sans GB.ttc', 'STHeiti Light.ttc'],
+                  'Regular': ['msyh.ttc', 'Deng.ttf', 'simsun.ttc', 'PingFang.ttc', 'Hiragino Sans GB.ttc', 'STHeiti Light.ttc']}
 
 
 # ---------- letters ----------
@@ -51,19 +56,23 @@ def font_file(weight):
     """The file of the font in one of the weights Bold, Medium, Regular: (file, number of the face in it, name of the face).
 
     DEMO_FONT_BOLD, DEMO_FONT_MEDIUM, DEMO_FONT_REGULAR name a file (file#3 for a face in a collection); else Noto Sans CJK SC
-    or Source Han Sans from the usual folders; else whatever the system gives for Chinese text of that weight."""
+    or Source Han Sans from the usual folders; else the system's own Chinese face (Microsoft YaHei, PingFang SC, Hiragino);
+    else whatever the system gives for Chinese text of that weight."""
     named = os.environ.get(f'DEMO_FONT_{weight.upper()}')
     if named:
         path, _, index = named.partition('#')
         return path, int(index or 0), ImageFont.truetype(path, 20, index=int(index or 0)).getname()[0]
     for folder in FONT_FOLDERS:
-        for name in FONT_NAMES:
-            path = Path(folder).expanduser() / name.format(weight)
+        for name in FONT_NAMES + PLATFORM_FONTS[weight]:
+            platform = name in PLATFORM_FONTS[weight]
+            path = Path(folder).expanduser() / (name if platform else name.format(weight))
             for index in range(12 if path.is_file() else 0):
                 try:
                     family = ImageFont.truetype(str(path), 20, index=index).getname()[0]
                 except OSError:
                     break
+                if platform:  # the system's face: its first one is the one wanted (PingFang SC is the first Chinese face in PingFang.ttc)
+                    return str(path), index, family
                 if path.suffix != '.ttc' or family.endswith((' SC', ' CN')):
                     return str(path), index, family
     if shutil.which('fc-match'):

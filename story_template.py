@@ -8,6 +8,10 @@ Run it with:
 
 The full director API is in references/director.md. Keep captions short: they are read aloud by
 demo_voice.py, and each one gets only until the next caption to be said.
+
+Before writing this file, ask the user: whether the video should have a narration at all, in which
+language, and by which engine (see SKILL.md, step 0). The answers go into LANGUAGE and VOICE below,
+so the video can be made again exactly as it was.
 """
 from __future__ import annotations
 
@@ -22,16 +26,20 @@ CHAPTERS = ['Overview', 'Main task', 'Results']   # TODO: 2–5 short names
 VIEW = (1280, 620)                   # CSS px; width / height must be 64:31
 DENSITY = 2.5                        # device scale; VIEW width × DENSITY must stay below 4096
 PORT = 8791                          # the throwaway instance's port; must be free
-LOCALE = 'zh-CN'                     # page locale; use 'en-US' for an English app
+LANGUAGE = 'en'                      # TODO: the language of the captions, which is also the language of the narration:
+                                     # zh 普通话, en English, ja, ko, de, fr, es, it, pt, ru (demo_text.LANGUAGES)
+LOCALE = 'en-US'                     # the page's locale; 'zh-CN' for a Chinese app
 
 # Drawn by demo_render.py. `note` must be a colour the app itself does not use.
-LOOK = {'accent': '#2f6fed', 'note': '#ee5c18', 'fast': '快进'}
+LOOK = {'accent': '#2f6fed', 'note': '#ee5c18', 'fast': 'Fast forward'}
 
-# Narration overrides; see references/narration.md. Remove what you do not need.
+# Narration; see references/narration.md and references/engines.md. Remove what you do not need.
 VOICE = {
-    # 'speaker': 'Serena',           # one of the TTS model's built-in speakers
-    # 'pace': 4.3,                   # target syllables per second
-    # 'say': {'WPS 365': 'W P S 三六五'},   # fix how the narration reads a caption
+    # 'engine': 'kokoro',            # qwen (local GPU) | kokoro (local CPU) | openai | compatible | elevenlabs | dashscope
+    # 'speaker': 'af_maple',         # the voice: a Qwen speaker, a Kokoro voice, or a remote voice id
+    # 'model': 'gpt-4o-mini-tts',    # remote: the model id
+    # 'pace': 4.0,                   # units a second (syllables for English, 字 for Mandarin)
+    # 'say': {'WPS 365': 'W P S three sixty five'},   # fix how the narration reads a caption
 }
 
 

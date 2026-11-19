@@ -150,9 +150,9 @@
   <!-- ===================== 中文 ===================== -->
   <div class="wrap lang-block" data-lang="zh" lang="zh-CN">
     <section class="hero">
-      <p class="eyebrow"><span class="dot"></span>Claude Code 技能 · 开源 · MIT</p>
+      <p class="eyebrow"><span class="dot"></span>Claude Code / Codex 技能 · 开源 · MIT</p>
       <h1>把 Web 应用变成<br><span class="accent">带解说的演示视频</span></h1>
-      <p class="lead">写一个 Python 分镜文件，自动完成录制、1080p60 渲染、普通话配音和逐项核验。不需要录屏软件，不需要手工剪辑，也不上传到云端。</p>
+      <p class="lead">写一个 Python 分镜文件，自动完成录制、1080p60 渲染和逐项核验。旁白可有可无：语言（普通话、英语等十种）和引擎（本机 GPU、本机 CPU、远程 API）由你选。支持 Windows、macOS、Linux。</p>
       <div class="actions">
         <a class="btn primary" href="#demo">观看 1 分钟演示</a>
         <a class="btn" href="https://github.com/OrrrGE/autoRecording">GitHub 仓库</a>
@@ -160,7 +160,7 @@
       <ul class="meta">
         <li>1920×1080 · 60 fps</li>
         <li>镜头 / 标注 / 字幕 / 章节</li>
-        <li>本地 Qwen3-TTS 配音</li>
+        <li>旁白可选 · 本地 / 远程引擎</li>
       </ul>
     </section>
 
@@ -194,11 +194,11 @@
         <article class="card">
           <span class="num">03</span>
           <h3>配音与核验</h3>
-          <p>本地 Qwen3-TTS 逐句贴合字幕；Whisper 重听、CAM++ 核对音色、包哈希证明画面未被改动。</p>
+          <p>旁白可选：本机 Qwen3-TTS（GPU）、本机 Kokoro（CPU）、远程 API（OpenAI 兼容 / ElevenLabs / 百炼）。Whisper 重听、CAM++ 核对音色、包哈希证明画面未被改动。</p>
         </article>
       </div>
       <ul class="chips">
-        <li>局部放大</li><li>原文高亮</li><li>编号步骤</li><li>等待快进</li><li>画面外提示</li><li>数字核验</li>
+        <li>旁白可选</li><li>十种语言</li><li>三种配音引擎</li><li>Windows / macOS</li><li>原文高亮</li><li>编号步骤</li><li>数字核验</li>
       </ul>
     </section>
 
@@ -214,7 +214,7 @@ $PY scripts/demo_record.py --story examples/selftest/story.py --work /tmp/demo-s
 $PY scripts/demo_render.py --work /tmp/demo-selftest --check
 $PY scripts/demo_render.py --work /tmp/demo-selftest --out /tmp/demo-selftest/selftest.mp4
 $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
-      <p class="note">前四条不需要显卡；最后一条配音需要 NVIDIA 显卡和语音模型。环境检查：<code>python3 scripts/demo_env.py</code>。</p>
+      <p class="note">录制和渲染不需要显卡。最后一条配音可选：有 NVIDIA 显卡用 Qwen，没有就用 Kokoro（<code>demo_env.py setup --kokoro</code>）或远程 API；不要旁白就跳过。环境检查：<code>python3 scripts/demo_env.py</code>。</p>
     </section>
 
     <section>
@@ -259,7 +259,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <article class="card">
           <h3>录制 / 渲染</h3>
           <ul class="list">
-            <li>Linux（已测试；macOS 大概率可用）</li>
+            <li>Linux / Windows / macOS</li>
             <li>Python 3.10+</li>
             <li>ffmpeg：libx264、aac、atempo、ebur128</li>
             <li>Chromium、Noto Sans CJK</li>
@@ -269,10 +269,10 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <article class="card">
           <h3>配音（可选）</h3>
           <ul class="list">
-            <li>NVIDIA 显卡，约 6 GB 空闲显存</li>
-            <li>Qwen3-TTS 1.7B Base + CustomVoice</li>
-            <li>Whisper large-v3、CAM++（核验）</li>
-            <li>全部本地运行，音视频不上传</li>
+            <li>Qwen：NVIDIA 显卡，约 6 GB 空闲显存</li>
+            <li>Kokoro：任意 CPU，约 400 MB 模型</li>
+            <li>远程：OpenAI 兼容 / ElevenLabs / 百炼，密钥留本机</li>
+            <li>十种语言；Whisper + CAM++ 核验</li>
           </ul>
         </article>
       </div>
@@ -285,6 +285,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/SKILL.md"><b>SKILL.md</b><span>Claude Code 技能入口与流程</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/director.md"><b>Story API</b><span>镜头、标注、步骤、滚动、下载</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/narration.md"><b>配音指南</b><span>换音色、念法修正、时长贴合</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/engines.md"><b>配音引擎</b><span>Qwen / Kokoro / 远程 API 与音色</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/environment.md"><b>环境安装</b><span>ffmpeg、Chromium、CUDA、模型</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording"><b>GitHub</b><span>源码、Issues、更新</span></a>
       </div>
@@ -294,9 +295,9 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
   <!-- ===================== English ===================== -->
   <div class="wrap lang-block" data-lang="en" lang="en" hidden>
     <section class="hero">
-      <p class="eyebrow"><span class="dot"></span>Claude Code skill · Open source · MIT</p>
+      <p class="eyebrow"><span class="dot"></span>Claude Code / Codex skill · Open source · MIT</p>
       <h1>Turn a web app into a<br><span class="accent">narrated demo video</span></h1>
-      <p class="lead">Write one Python story file. The pipeline records the app, renders a 1080p60 video, adds a Mandarin narration, and verifies the result numerically. No screen recorder, no manual editing, no cloud upload.</p>
+      <p class="lead">Write one Python story file. The pipeline records the app, renders a 1080p60 video and verifies it numerically. The narration is optional: pick its language (ten, Mandarin and English among them) and its engine (local GPU, local CPU, or a remote API). Windows, macOS and Linux.</p>
       <div class="actions">
         <a class="btn primary" href="#demo-en">Watch the 1-minute demo</a>
         <a class="btn" href="https://github.com/OrrrGE/autoRecording">GitHub repository</a>
@@ -304,7 +305,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
       <ul class="meta">
         <li>1920×1080 · 60 fps</li>
         <li>Camera / marks / captions / chapters</li>
-        <li>Local Qwen3-TTS narration</li>
+        <li>Optional narration · local or remote</li>
       </ul>
     </section>
 
@@ -338,11 +339,11 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <article class="card">
           <span class="num">03</span>
           <h3>Narrate &amp; verify</h3>
-          <p>Local Qwen3-TTS fits each line to its caption. Whisper re-listens, CAM++ checks the voice, packet hashes prove the picture is untouched.</p>
+          <p>Optional narration by local Qwen3-TTS (GPU), local Kokoro (CPU) or a remote API (OpenAI-compatible / ElevenLabs / DashScope). Whisper re-listens, CAM++ checks the voice, packet hashes prove the picture is untouched.</p>
         </article>
       </div>
       <ul class="chips">
-        <li>Camera zooms</li><li>Text highlights</li><li>Numbered steps</li><li>Fast-forward waits</li><li>Off-page notes</li><li>Numeric checks</li>
+        <li>Optional narration</li><li>Ten languages</li><li>Three engines</li><li>Windows / macOS</li><li>Text highlights</li><li>Numbered steps</li><li>Numeric checks</li>
       </ul>
     </section>
 
@@ -358,7 +359,7 @@ $PY scripts/demo_record.py --story examples/selftest/story.py --work /tmp/demo-s
 $PY scripts/demo_render.py --work /tmp/demo-selftest --check
 $PY scripts/demo_render.py --work /tmp/demo-selftest --out /tmp/demo-selftest/selftest.mp4
 $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
-      <p class="note">The first four commands need no GPU. Narration needs an NVIDIA GPU and the speech models. Check the machine with <code>python3 scripts/demo_env.py</code>.</p>
+      <p class="note">Recording and rendering need no GPU. The last command is optional: Qwen with an NVIDIA GPU, Kokoro on any CPU (<code>demo_env.py setup --kokoro</code>), or a remote API — or skip it for a silent video. Check the machine with <code>python3 scripts/demo_env.py</code>.</p>
     </section>
 
     <section>
@@ -403,7 +404,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <article class="card">
           <h3>Record / render</h3>
           <ul class="list">
-            <li>Linux (tested; macOS likely works)</li>
+            <li>Linux / Windows / macOS</li>
             <li>Python 3.10+</li>
             <li>ffmpeg with libx264, aac, atempo, ebur128</li>
             <li>Chromium and Noto Sans CJK</li>
@@ -413,10 +414,10 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <article class="card">
           <h3>Narration (optional)</h3>
           <ul class="list">
-            <li>NVIDIA GPU, about 6 GB free VRAM</li>
-            <li>Qwen3-TTS 1.7B Base + CustomVoice</li>
-            <li>Whisper large-v3 and CAM++ for checks</li>
-            <li>Everything runs locally; nothing is uploaded</li>
+            <li>Qwen: NVIDIA GPU, ~6 GB free VRAM</li>
+            <li>Kokoro: any CPU, ~400 MB model</li>
+            <li>Remote: OpenAI-compatible / ElevenLabs / DashScope; keys stay local</li>
+            <li>Ten languages; checked by Whisper + CAM++</li>
           </ul>
         </article>
       </div>
@@ -429,6 +430,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/SKILL.md"><b>SKILL.md</b><span>The Claude Code skill entry point</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/director.md"><b>Story API</b><span>Camera, marks, steps, scrolling, downloads</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/narration.md"><b>Narration guide</b><span>Voices, pronunciation, fitting</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/engines.md"><b>Engines</b><span>Qwen, Kokoro, remote APIs and voices</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/environment.md"><b>Environment</b><span>ffmpeg, Chromium, CUDA, models</span></a>
         <a class="link-card" href="https://github.com/OrrrGE/autoRecording"><b>GitHub</b><span>Source, issues, updates</span></a>
       </div>
@@ -440,7 +442,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
 <footer>
   <div class="wrap">
     <span>autoRecording · MIT</span>
-    <span>Built for Claude Code · <a href="https://github.com/OrrrGE/autoRecording">GitHub</a></span>
+    <span>Built for Claude Code and Codex · <a href="https://github.com/OrrrGE/autoRecording">GitHub</a></span>
   </div>
 </footer>
 

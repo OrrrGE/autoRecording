@@ -2,7 +2,7 @@
 
 **用一个 Python 脚本文件，把 Web 应用自动做成带解说的演示视频。**
 
-这是一个 [Claude Code](https://claude.com/claude-code) 技能，也是一组可以直接运行的 Python 脚本：在无头浏览器里操作应用、录制画面，按分镜合成 1080p60 视频，配上稳定的普通话解说，再用数字指标核验成片。不需要录屏软件，不需要手工剪辑，也不上传到任何云服务。
+这是一个 [Claude Code](https://claude.com/claude-code) / [Codex](https://openai.com/codex/) 技能，也是一组可以直接运行的 Python 脚本：在无头浏览器里操作应用、录制画面，按分镜合成 1080p60 视频，按需配上解说（语言与引擎可选），再用数字指标核验成片。支持 Linux、Windows、macOS；不需要录屏软件，不需要手工剪辑；用本地引擎时音频不出本机。
 
 [English](README.en.md) · [▶ 观看 1 分钟演示](https://orrrge.github.io/autoRecording/#demo) ·
 [交互式页面](https://orrrge.github.io/autoRecording/) · [README](README.md) ·
@@ -21,7 +21,8 @@
 - **字幕**：同时就是解说稿。
 - **等待快进**：耗时的任务按 4 倍速播放，顶部会标明「快进 ×4」。
 - **画面外提示**：下载、系统弹窗等页面里看不到的事情。
-- **普通话解说**：同一个音色，逐句贴合字幕时长，并用语音识别和声纹做核验。
+- **旁白（可选）**：十种语言（普通话、英语、日、韩、德、法、西、意、葡、俄）；同一个音色，逐句贴合字幕时长，用语音识别和声纹核验。
+- **三种引擎**：本地 Qwen3-TTS（NVIDIA GPU）、本地 Kokoro（任意 CPU，Windows/macOS 可用）、远程 API（OpenAI 兼容 / ElevenLabs / 阿里百炼）。
 
 录制时画面帧和时间线（`timeline.json`）分开保存，所以改字幕、标注和镜头后可以只重新渲染，不必重录。
 
@@ -33,8 +34,8 @@ flowchart LR
     B --> C["frames/*.jpg<br/>timeline.json"]
     C --> D["demo_render.py<br/>Pillow + OpenCV + ffmpeg"]
     D --> E["demo.mp4<br/>无声 1080p60"]
-    E --> F["demo_voice.py<br/>Qwen3-TTS + Whisper + CAM++"]
-    F --> G["demo-配音版.mp4<br/>带解说"]
+    E -. "需要旁白时" .-> F["demo_voice.py<br/>Qwen / Kokoro / 远程 API + Whisper + CAM++"]
+    F --> G["demo-配音版.mp4 / demo-narrated.mp4<br/>带解说"]
     D -. "数字核验" .-> H["check 输出"]
     F -. "数字核验" .-> H
 ```
@@ -48,11 +49,15 @@ flowchart LR
 | | |
 | --- | --- |
 | **脚本驱动** | story 就是普通 Python：`await d.click(...)`、`await d.say(...)`、`await d.zoom(...)` |
+| **跨平台** | Linux、Windows、macOS；Windows 用 Chrome/Edge 与微软雅黑，macOS 用苹方，全自动适配 |
 | **隔离录制** | 在另一个端口、独立数据目录启动临时实例，绝不动正在使用的服务 |
 | **通用** | Chromium 能打开的 Web 应用都行，不绑定框架 |
 | **录后可改** | 镜头、标注、字幕都在 `timeline.json` 里 |
 | **确定性检查** | `--check` 能发现空标注、颜色不符、文字压住正文、标注出画、字幕超宽、缺字 |
-| **本地解说** | GPU 上的 Qwen3-TTS 1.7B，无 API Key、无按分钟计费、音频不出本机 |
+| **旁白可选** | 不要旁白就只出无声片；要旁白就选语言和引擎，选择写进 story，可复现 |
+| **三种引擎** | 本地 GPU（Qwen3-TTS）、本地 CPU（Kokoro）、远程 API（OpenAI 兼容 / ElevenLabs / 百炼） |
+| **十种语言** | 普通话、英语、日、韩、德、法、西、意、葡、俄 |
+| **本地优先** | 本地引擎（Qwen / Kokoro）无 API Key、无按分钟计费、音频不出本机 |
 | **可验证** | Whisper 重听听每一句，CAM++ 核对音色，包哈希证明画面未被改动 |
 | **可续跑** | 配音各步骤有缓存，重跑只做缺的部分 |
 
@@ -60,11 +65,11 @@ flowchart LR
 
 | | 录制 / 渲染 | 解说 |
 | --- | --- | --- |
-| 操作系统 | Linux（已测试）；macOS 大概率可用；Windows 未测试 | 同上 |
+| 操作系统 | Linux（已测试）、Windows、macOS | 同左；Qwen 引擎不支持 macOS（无 CUDA） |
 | Python | 3.10+ | 3.10–3.12 |
-| 显卡 | 不需要 | NVIDIA，约 6 GB 空闲显存 |
+| 显卡 | 不需要 | Qwen：NVIDIA，约 6 GB 空闲显存；Kokoro 与远程：不需要 |
 | 系统依赖 | `ffmpeg`（libx264/aac/atempo/ebur128）、Chromium、Noto Sans CJK | `ffmpeg` |
-| 模型 | 无 | Qwen3-TTS 1.7B Base + CustomVoice（约 9 GB）、Whisper large-v3、CAM++ |
+| 模型 | 无 | 按引擎：Qwen3-TTS 1.7B ×2（约 9 GB）／Kokoro（约 400 MB）／远程密钥；核验另需 Whisper large-v3、CAM++ |
 
 录制和渲染在纯 CPU 笔记本上就能跑；解说可选，没有 GPU 也能得到无声成片。完整安装见 [`references/environment.md`](references/environment.md)。
 
@@ -78,6 +83,16 @@ git clone https://github.com/OrrrGE/autoRecording \
 ```
 
 新开一个 Claude Code 会话，直接让它做演示视频即可。Claude 会读取 `SKILL.md`、编写 story 并运行整条流程。你也可以完全不用 Claude，自己运行脚本。
+
+### 作为 Codex 技能
+
+```bash
+git clone https://github.com/OrrrGE/autoRecording \
+    ~/.agents/skills/autoDemoRecordingSkill
+# 或放进 Codex 自己的技能目录：~/.codex/skills/autoDemoRecordingSkill
+```
+
+Codex 加载同一个 `SKILL.md`；`agents/openai.yaml` 提供显示名和默认提示词。区别只在提问方式：Claude Code 用选择框，Codex 直接在对话里问。
 
 ### 只用脚本
 
@@ -114,13 +129,25 @@ $PY scripts/demo_render.py --work /tmp/demo-selftest --check
 # 3. 渲染无声成片（笔记本上约 20 秒）
 $PY scripts/demo_render.py --work /tmp/demo-selftest --out /tmp/demo-selftest/selftest.mp4
 
-# 4. 配音（需要显卡和语音模型）
-$PY scripts/demo_voice.py --work /tmp/demo-selftest
+# 4. 配音（可选；下面三种引擎任选其一）
+$PY scripts/demo_voice.py --work /tmp/demo-selftest          # 自动选：GPU 上的 Qwen → CPU 上的 Kokoro → 有密钥的远程服务
+python3 scripts/demo_env.py setup --kokoro                    # 没有显卡时：装 Kokoro（约 400 MB）
+python3 scripts/demo_env.py key openai=sk-…                   # 或：记下一个远程密钥
 ```
 
-得到 `/tmp/demo-selftest/selftest.mp4`（无声）和 `selftest-配音版.mp4`（带解说），1920×1080、60 fps、约 64 秒。渲染检查不应出现 `注意：`，配音检查应以 `没有发现问题` 结尾。
+得到 `/tmp/demo-selftest/selftest.mp4`（无声）和 `selftest-配音版.mp4` / `selftest-narrated.mp4`（带解说），1920×1080、60 fps、约 64 秒。渲染检查不应出现 `注意：`，配音检查应以 `没有发现问题` 结尾。英文流程用 `examples/selftest/story-en.py`。
 
 ## 使用教程
+
+### 0. 先问用户
+
+动手前先问清楚三件事，并把答案写进 story：
+
+1. **要不要旁白？** 不要，就只交付无声成片。
+2. **旁白（也就是字幕）用什么语言？** 普通话、英语、日语、韩语、德语、法语、西班牙语、意大利语、葡萄牙语或俄语。
+3. **用哪个引擎？** 本机已装好的本地模型优先（有 NVIDIA 显卡推荐 Qwen，否则 Kokoro）；用户提供 API 就用远程；都没有就问用户是装 Kokoro 还是不要旁白。远程还需要密钥（存环境变量或 `demo_env.py key`，不写进 story）。
+
+Rule of thumb：**本地能用就用本地；给了 API 就用远程；不要旁白就不跑配音。** Claude Code 里用选择框问，Codex 里直接问。
 
 ### 1. 隔离应用
 
@@ -140,9 +167,12 @@ DATA_DIR=/tmp/demo-data python -m myapp --port 8799
 TITLE = 'Acme 收件箱'
 SUBTITLE = '产品演示'
 CHAPTERS = ['收件箱', '筛选', '小结']
+LANGUAGE = 'zh'             # 字幕语言，也是旁白语言
 VIEW = (1280, 620)          # 必须 64:31
 DENSITY = 2.5
 PORT = 8799
+
+VOICE = {'engine': 'kokoro', 'speaker': 'zf_039'}   # 旁白：引擎与音色；不要旁白就不写
 
 def launch(work, port):
     return {
@@ -223,7 +253,19 @@ $PY scripts/demo_voice.py lines --work /tmp/demo-work   # 先看每句的念法�
 $PY scripts/demo_voice.py --work /tmp/demo-work
 ```
 
-每一句字幕都会生成解说，同一个音色；每句生成多遍，用语音识别核对内容，放进字幕窗口内，再统一响度。无声画面原样复制，不重新编码。
+每一句字幕都会生成解说，同一个音色；每句生成多遍，用语音识别核对内容，放进字幕窗口内，再统一响度。无声画面原样复制，不重新编码。输出名在普通话下是 `-配音版`，其他语言是 `-narrated`。
+
+引擎由 `VOICE['engine']` 或 `work/voice/settings.json` 决定：
+
+| 引擎 | 需要 | 说明 |
+| --- | --- | --- |
+| `qwen` | NVIDIA 显卡、Qwen 两个模型 | 音质最好；参考音固定音色，9 个内置音色；不支持 macOS |
+| `kokoro` | `demo_env.py setup --kokoro` | CPU 即可，Windows/macOS 也能用；中英双语；音色固定（不能克隆） |
+| `openai` / `compatible` | 密钥、可选 `base_url` | OpenAI 语音接口及其兼容服务（含自建/第三方） |
+| `elevenlabs` | 密钥与 voice id | 多语言模型，音色用 voice id |
+| `dashscope` | 阿里云百炼密钥 | Qwen-TTS，48 个音色；没有语速参数 |
+
+Kokoro 的英文词表里没有的词会被跳过，`anchor` 步骤会列出来，需要 `say` 写出念法或换引擎。详见 [`references/engines.md`](references/engines.md)。
 
 最后的检查会核对画面是否逐包相同、每句是否落在字幕时间内、音色是否一致、响度是否合格、字幕之外有没有声音。更换音色、修正数字/字母念法（`VOICE['say']`）、调整语速、某句放不下怎么办，见 [`references/narration.md`](references/narration.md)。
 
@@ -234,6 +276,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-work
 | 字幕文字、标注、镜头、顺序 | `demo_record.py` → `demo_render.py` → `demo_voice.py` |
 | 只改 `timeline.json` 里的字幕/标注时间 | `demo_render.py`（下次录制会覆盖它） |
 | 只改配音设置 | `demo_voice.py build`，再 `check` |
+| 换引擎、音色或语言 | `demo_voice.py anchor`（或删掉 `work/voice`），再跑一遍 |
 | 某一句念错 | 删掉它在 `work/voice/takes` 里的录音，再 `demo_voice.py takes N` |
 | 换参考音色 | `demo_voice.py anchor 名字`，再跑一遍 `demo_voice.py` |
 
@@ -264,7 +307,8 @@ $PY scripts/demo_voice.py --work /tmp/demo-work
 | 命令 | 用途 |
 | --- | --- |
 | `python3 scripts/demo_env.py` | 检查环境 |
-| `python3 scripts/demo_env.py setup [--models]` | 创建技能 Python；可选下载核验模型 |
+| `python3 scripts/demo_env.py setup [--models] [--kokoro]` | 创建技能 Python；可选下载核验模型 / Kokoro |
+| `python3 scripts/demo_env.py key provider=…` / `--list` | 记住 / 查看远程密钥（不进 story） |
 | `python3 scripts/demo_env.py set name=path ...` | 记住工具或模型的位置 |
 | `demo_record.py --story S --work W [--quick]` | 录制帧和时间线 |
 | `demo_render.py --work W --check` | 数字检查时间线 |
@@ -276,14 +320,14 @@ $PY scripts/demo_voice.py --work /tmp/demo-work
 
 ```
 work/
-├── timeline.json        镜头、标注、字幕、光标、章节、facts、时钟
+├── timeline.json        镜头、标注、字幕、光标、章节、facts、时钟、语言
 ├── frames/              录制的页面帧（JPEG）
 ├── server.log           临时应用实例的输出
 ├── render.json          渲染写了什么、检查了什么
 ├── demo.mp4             无声成片
 └── voice/
     ├── anchor/          候选参考音
-    ├── anchor.wav       选中的参考音
+    ├── anchor.wav       选中的参考音（所有引擎都有，用来核对音色、定速）
     ├── trial/           各候选的试念
     ├── takes/           每句的每一遍（附测量数据）
     ├── final/           从成片中切出的每一句
@@ -306,6 +350,8 @@ work/
 | 标注文字压住正文 | 改 `place`、用 `pin`，或移动镜头 |
 | `字体里没有这些字符` | 安装 Noto Sans CJK，或设置 `DEMO_FONT_*` |
 | 解说某句太紧 | 缩短该字幕或在画面里多留时间，然后重录 |
+| `Kokoro 的词表里没有这些词` | 在 `VOICE['say']` 里写念法（如 `"API": "A P I"`），或换 Qwen / 远程引擎 |
+| 远程接口报 401 | 密钥不对：`demo_env.py key --list` 看看，重设密钥 |
 | `显存不够` | 关掉占显卡的程序；需要约 6.5 GB 空闲 |
 | 各句音色不一致 | 删掉 `work/voice` 重跑，或换一个 `anchor` |
 
@@ -313,18 +359,21 @@ work/
 
 - **用临时实例和示例数据录制。** 画面帧就是真实截图，屏幕上出现什么，视频里就有什么。
 - **不要提交 work 目录**：里面有页面截图、数据片段，`timeline.json` 还记录了 story 文件的绝对路径。仓库自带的 `.gitignore` 已排除常见输出路径。
-- **不上传任何音视频。** 配音和核验模型都在本机运行。
+- **本地引擎不上传任何东西。** Qwen 与 Kokoro、核验模型都在本机运行。
+- **远程引擎会把每句字幕发到服务商**（用于合成语音）；密钥只存在本机（环境变量或 `secrets.json`，0600）。介意的话用本地引擎或不要旁白。
 - **发布前亲自看一遍。** 数字检查无法判断画面上是否出现了不该出现的客户名称。
 
 ## 常见疑问
 
 **任何 Web 应用都能用吗？** Chromium 能打开、并且能用演示数据单独启动的应用都可以。需要登录的应用也行：把登录流程写进 story，或使用专门的演示账号。
 
-**能配英文解说吗？** 画面、字幕和标注都支持英文，但内置语音模型是普通话 Qwen3-TTS；英文旁白需要替换配音步骤。
+**能配英文解说吗？** 能，`LANGUAGE = 'en'`，三种引擎都支持英文；Kokoro 的英文音色是 `af_maple`、`af_sol`、`bf_vale`。日语、韩语等其余语言由 Qwen 或远程引擎发音。
 
-**一定要显卡吗？** 只有配音需要。录制、渲染和所有画面检查都只用 CPU。
+**一定要显卡吗？** 只有 Qwen 引擎需要。录制、渲染、Kokoro 配音和所有画面检查都只用 CPU。
 
-**Windows 能用吗？** 未测试。代码里有 Windows 相关路径（`Scripts`、Edge），但可能有粗糙之处；Linux 是受支持的平台。
+**不要旁白可以吗？** 可以。不运行 `demo_voice.py`，无声成片就是交付物；字幕仍然按所选语言计时。
+
+**Windows 和 macOS 能用吗？** 能。Linux 上做过完整回归；Windows 的进程管理（`taskkill /T`）、Chrome/Edge 路径、微软雅黑字体，macOS 的苹方字体与 Apple Silicon 都做了适配。Qwen 引擎只在 NVIDIA CUDA 上可用，macOS 请用 Kokoro 或远程。
 
 **为什么要写 Python 而不是用图形界面？** story 可以版本化、评审、重复执行。UI 改版后，同一个 story 仍然能产出同样的视频；手工录屏做不到。
 

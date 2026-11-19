@@ -17,8 +17,14 @@ from pathlib import Path
 TITLE = '待办清单'                     # the name in the band above the page
 SUBTITLE = '技能自检'                  # in grey next to it
 CHAPTERS = ['添加与勾选', '筛选与查找', '小结与导出']
+LANGUAGE = 'zh'                        # the captions, and with them the narration: 普通话. story-en.py is the English one.
 PORT = 8793
 PAGE = Path(__file__).resolve().parent / 'page'
+
+# Narration: left empty, the first engine that can speak here is taken (Qwen on the GPU, then Kokoro on the CPU,
+# then a remote service with a key). Write it down to keep the video reproducible, e.g.
+# VOICE = {'engine': 'kokoro', 'speaker': 'zf_062'} or {'engine': 'openai', 'speaker': 'marin'}
+VOICE = {}
 
 
 def launch(work, port):

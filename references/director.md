@@ -15,10 +15,11 @@ CHAPTERS = ['Overview', 'Task', 'Done']  # 2–5 short names; needed if you call
 VIEW = (1280, 620)                     # page size in CSS px; width/height must be 64:31
 DENSITY = 2.5                          # device scale; VIEW width × DENSITY < 4096
 PORT = 8791                            # throwaway instance's port
-LOCALE = 'zh-CN'                       # default
-LOOK = {'accent': '#2f6fed', 'note': '#ee5c18', 'fast': '快进'}
-VOICE = {...}                          # narration overrides, see narration.md
-READING = 5.5                          # characters per second a caption is given
+LANGUAGE = 'en'                        # the captions' language, and so the narration's: zh en ja ko de fr es it pt ru
+LOCALE = 'zh-CN'                       # the page's locale (default 'zh-CN')
+LOOK = {'accent': '#2f6fed', 'note': '#ee5c18', 'fast': '快进'}   # `fast` in the band's language
+VOICE = {...}                          # narration: engine, speaker, ...; see narration.md and engines.md
+READING = 5.5                          # units a second a caption is given; default: the language's own (5.5 字/s zh, 3.8 /s en)
 
 def launch(work, port): ...            # or set URL = 'http://...'
 def guard(d): ...                      # optional, before recording starts
@@ -27,6 +28,11 @@ async def story(d): ...                # required
 
 `VIEW` shapes: 1280×620, 1536×744, 1600×775, 1920×930. Other shapes are rejected with the ratio error.
 `DENSITY` above about 3 makes each recorded frame larger without adding visible detail; 2–2.5 is normal.
+
+`LANGUAGE` decides how a caption's reading time is computed and how `demo_voice.py` reads it; it also goes into
+`timeline.json`, so the narration is in the same language as the captions without being told again. If it is left
+out, it is taken from `LOCALE`, else guessed from the title and chapter names. The captions themselves must be
+written in that language.
 
 If both `URL` and `launch` exist, `launch` wins. If neither exists, recording stops.
 
@@ -80,8 +86,8 @@ Every frame and timeline event carries its time in the **finished video**, which
 | `async with d.fast(speed):` | what happens inside is played `speed` × faster in the video |
 | `await d.until(done, speed=4, limit=60, every=0.3, settle=0.4, what='…')` | poll an async predicate; the wait is played fast; raises after `limit` seconds |
 
-`d.say` computes the caption's reading time from its length (Chinese by characters and spoken syllables,
-English at about 155 words a minute). If the next action comes before that time, the caption is simply
+`d.say` computes the caption's reading time from its length in the story's language (Mandarin by characters and
+spoken syllables, English and the other spaced languages by syllables and words via `demo_text.reading_time`). If the next action comes before that time, the caption is simply
 replaced early; call `await d.read()` before moving on when the viewer needs the full time.
 
 `d.until` calls `done()` every `every` seconds. `done` is an async function:

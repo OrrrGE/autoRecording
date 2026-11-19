@@ -1,25 +1,27 @@
-"""Give a demo video a spoken narration: its captions, read in Mandarin by the local Qwen3-TTS 1.7B model.
+"""Give a demo video a spoken narration: its captions, read in the language the captions are in.
 
 The picture is not touched and the video keeps its length. Every line starts just after its caption
 appears and ends before the next caption does; a line that would run over is said a little faster,
 never the other way round. One short reference clip fixes the voice, its pitch and its pace, and
-every line is spoken as a continuation of that same clip, so the voice does not drift from line to line.
+every line is spoken as a continuation of that same clip (Qwen) or in the same built-in voice (Kokoro,
+remote services), so the voice does not drift from line to line.
 
     PY=~/.cache/auto-demo-recording/venv/bin/python
     $PY demo_voice.py lines --work path/to/work        # the lines as they will be said and the time each has; needs no model
-    $PY demo_voice.py --work path/to/work              # all steps; writes <the rendered video>-配音版.mp4 next to it
+    $PY demo_voice.py --work path/to/work              # all steps; writes <the rendered video>-<配音版 | narrated>.mp4 next to it
     $PY demo_voice.py build --work path/to/work        # only choose, fit and mix again (after changing settings)
     $PY demo_voice.py anchor 2-5 --work path/to/work   # another reference clip (they are in work/voice/anchor); then all steps again
 
-The steps: anchor (reference clips, by the model's own speaker) - trial (a few lines after each of a
-handful of them; the one whose lines fit their captions and move least in pitch is taken) - takes (each
-line several times) - hear (a speech recogniser writes down what was said, a speaker model tells how
-close the voice is) - build (choose a take per line, fit, level, mix, put under the picture) - check
-(the finished file, in numbers: same picture, same length, every line inside its caption and said right).
-What is done is kept: a step that is run again only does what is missing or has changed.
+The engine comes from VOICE['engine'] in the story file or work/voice/settings.json (see references/engines.md):
+qwen (local GPU, clones the reference voice), kokoro (local CPU, Chinese and English), or a remote service
+(openai, compatible, elevenlabs, dashscope). The language comes from VOICE['language'] or the story's LANGUAGE.
 
-The settings are DEFAULTS below; VOICE in the story file changes them (it is recorded into the
-timeline), and work/voice/settings.json changes them again. See references/narration.md.
+The steps: anchor (the reference clip of the voice) - trial (only Qwen: a few lines after each candidate; the one
+whose lines fit their captions and move least in pitch is taken) - takes (each line several times) - hear (a speech
+recogniser writes down what was said, a speaker model tells how close the voice is) - build (choose a take per
+line, fit, level, mix, put under the picture) - check (the finished file, in numbers: same picture, same length,
+every line inside its caption and said right). What is done is kept: a step that is run again only does what is
+missing or has changed.
 """
 from __future__ import annotations
 
@@ -39,27 +41,34 @@ from types import SimpleNamespace
 import numpy as np
 
 import demo_common
-from demo_common import HAN, need, syllables, where
+import demo_text
+import demo_tts
+from demo_common import need, where
 
 HERE = Path(__file__).resolve().parent
-RATE = 24000   # what the model gives
+RATE = 24000   # what every engine gives (or is brought to)
 SAMPLING = dict(do_sample=True, temperature=0.6, top_p=0.88, top_k=32, repetition_penalty=1.08)  # little is left to chance: one line sounds like the next
 SAME = 0.65   # two clips count as the same voice from this likeness on (the speaker model gives 0.8 to 0.95 for one voice, 0.2 to 0.6 for two)
-STOCK = '下面按顺序介绍各项功能，每一步操作都会在画面上标出。'
 HOW = f'运行 python3 {HERE / "demo_env.py"} 看缺什么、怎么补'
 DEFAULTS = {
-    'speaker': 'Serena',     # the model's own speaker the reference clips are made with
-    'language': 'Chinese',
+    'engine': None,          # qwen, kokoro, openai, compatible, elevenlabs, dashscope; left empty: the first that can speak here
+    'language': None,        # zh, en, ja, ko, de, fr, es, it, pt, ru; left empty: the story's LANGUAGE, else the captions themselves
+    'speaker': None,         # the voice: a Qwen speaker, a Kokoro voice ('zf_062' or 86), or a remote voice id; left empty: the engine's usual one
+    'model': None,           # remote: the model id (openai: gpt-4o-mini-tts; dashscope: qwen3-tts-flash; elevenlabs: eleven_multilingual_v2)
+    'base_url': None,        # remote: another endpoint (a proxy, a self-hosted service, the international region)
+    'api_key': None,         # remote: usually from the environment or demo_env.py key, not written in the story
+    'language_code': None,   # remote: the service's name for the language where it takes one (dashscope takes it by itself)
+    'instructions': None,    # remote: a style instruction, where the service takes one (OpenAI's instructions)
     'styles': ['用标准普通话做软件功能讲解。语气平稳、客观，不带情绪起伏，音高和音量保持均匀，语速中等，吐字清楚，句末自然收音。',
                '用标准普通话做软件功能讲解。语气平稳、沉着，像在念一份说明，音高起伏很小，语速中等偏快，吐字清楚。',
                '用标准普通话做软件功能讲解。语气平稳、客观，不带情绪起伏，音高和音量保持均匀，语速稍慢，吐字清楚，句末自然收音。',
-               '用标准普通话做软件功能讲解。语气平稳、沉着，像在念一份说明，音高起伏很小，语速偏慢，从容不迫，吐字清楚。'],
-    'candidates': 8,         # reference clips made in each style
-    'anchor_text': None,     # what the reference clips say; left empty: the title and the first captions, 34 to 50 syllables
-    'anchor': None,          # the reference clip to take, e.g. '3-6'; left empty: the one the trial finds
-    'say': {},               # how to say what the rules get wrong: {'WPS 365': 'W P S 三六五'} (demo_common.spoken)
-    'pace': 4.3,             # syllables a second the narration should have where the captions leave it the choice: calm, as someone explaining
-    'takes': 6,              # times each line is spoken; the steadiest that says the text right is kept
+               '用标准普通话做软件功能讲解。语气平稳、沉着，像在念一份说明，音高起伏很小，语速偏慢，从容不迫，吐字清楚。'],   # Qwen: the deliveries the reference clips are tried in
+    'candidates': 8,         # Qwen: reference clips made in each style
+    'anchor_text': None,     # what the reference clip says; left empty: the title and the first captions
+    'anchor': None,          # Qwen: the reference clip to take, e.g. '3-6'; left empty: the one the trial finds
+    'say': {},               # how to say what the rules get wrong: {'WPS 365': 'W P S 三六五'} (demo_text.spoken)
+    'pace': None,            # units a second the narration should have where the captions leave it the choice; left empty: what the language takes (4.3 字/秒 for Mandarin)
+    'takes': None,           # times each line is spoken; left empty: 6 for Qwen, 4 for Kokoro, 2 for a remote service
     'lead': 0.25, 'gap': 0.30,           # a line starts this long after its caption appears, and ends at least this long before the next one
     'lead_min': 0.10, 'gap_min': 0.15,   # what these give way to where a line has little time
     'fastest': 1.12,         # no line should be sped up by more than this (never slowed down)
@@ -78,16 +87,41 @@ def configure(work, video=None, out=None):
     unknown = sorted(set(chosen) - set(DEFAULTS))
     if unknown:
         raise SystemExit(f'配音设置里有不认识的项：{"、".join(unknown)}；能设的是 {"、".join(DEFAULTS)}')
+    captions = [event['text'] for event in timeline.get('events') or [] if event['type'] == 'caption' and event.get('text')]
+    tongue = demo_text.language(chosen.get('language') or timeline.get('language')) or demo_text.guess(captions or [timeline.get('title') or ''])
+    engine = demo_tts.choose(chosen['engine'], chosen['api_key'], chosen['base_url'])
+    if tongue not in demo_tts.ENGINES[engine]['languages']:
+        raise SystemExit(f'{demo_tts.ENGINES[engine]["name"]} 不说 {demo_text.LANGUAGES[tongue]["name"]}；能做的是 '
+                         f'{"、".join(demo_text.LANGUAGES[code]["name"] for code in demo_tts.ENGINES[engine]["languages"])}。换一个引擎，或换一种语言')
+    speaker = chosen['speaker'] or demo_tts.default_voice(engine, tongue)
+    if engine == 'qwen':
+        speaker = demo_tts.qwen_speaker(speaker)
+    if engine == 'elevenlabs' and not speaker:
+        raise SystemExit('ElevenLabs 要用 voice id：在 VOICE 里写 speaker（例如 21m00Tcm4TlvDq8ikWAM 是公开示例音色 Rachel）')
+    if engine != 'qwen':
+        try:  # the voice is checked now, before any step spends time on it
+            demo_tts.make(engine, tongue, speaker=speaker, model=chosen['model'], base_url=chosen['base_url'],
+                          api_key=chosen['api_key'], language_code=chosen['language_code'])
+        except demo_tts.TTSError as error:
+            raise SystemExit(str(error))
+    plan = {'qwen': 6, 'kokoro': 4}.get(engine, 2)
+    pace = float(chosen['pace'] or demo_text.LANGUAGES[tongue]['pace'])
     rendered = work / 'render.json'
     if not video and rendered.is_file():
         video = Path(json.loads(rendered.read_text(encoding='utf-8'))['out'])
     cfg.__dict__.update(chosen, work=work, folder=work / 'voice', timeline=timeline, title=timeline.get('title') or '', video=video,
-                        out=out or (video.with_name(video.stem + '-配音版.mp4') if video else None))
+                        tongue=tongue, engine=engine, speaker=speaker, pace=pace, takes=int(chosen['takes'] or plan),
+                        qwen_language=demo_text.LANGUAGES[tongue]['qwen'], unit=demo_text.LANGUAGES[tongue]['unit'],
+                        out=out or (video.with_name(video.stem + '-' + demo_text.LANGUAGES[tongue]['narrated'] + '.mp4') if video else None))
 
 
 # ---------- the lines ----------
 def spoken(text):
-    return demo_common.spoken(text, cfg.say)
+    return demo_text.spoken(text, cfg.say, cfg.tongue)
+
+
+def units(text):
+    return demo_text.units(text, cfg.tongue)
 
 
 def lines():
@@ -96,9 +130,9 @@ def lines():
     out = []
     for index, caption in enumerate(captions):
         say = spoken(caption['text'])
-        if syllables(say):
+        if units(say):
             end = captions[index + 1]['t'] if index + 1 < len(captions) else cfg.timeline['duration']
-            out.append({'n': len(out) + 1, 'start': caption['t'], 'window': end - caption['t'], 'text': caption['text'], 'say': say, 'syllables': syllables(say)})
+            out.append({'n': len(out) + 1, 'start': caption['t'], 'window': end - caption['t'], 'text': caption['text'], 'say': say, 'units': units(say)})
     return out, cfg.timeline['duration']
 
 
@@ -109,13 +143,13 @@ def show_lines():
     tight = 0
     for line in script:
         room, least = line['window'] - cfg.lead - cfg.gap, line['window'] - cfg.lead_min - cfg.gap_min
-        needs = line['syllables'] / room if room > 0 else 99.0
+        needs = line['units'] / room if room > 0 else 99.0
         flag = ''
-        if least <= 0 or line['syllables'] / (least * cfg.fastest) > 4.9:
+        if least <= 0 or line['units'] / (least * cfg.fastest) > cfg.pace + 0.6:
             flag, tight = '  ← 多半放不下：改短字幕，或重录时让它多停一会儿', tight + 1
-        elif needs > 4.8:
+        elif needs > cfg.pace + 0.5:
             flag = '  ← 偏紧'
-        print(f'{line["n"]:3d} {line["start"]:7.2f} {line["window"]:5.2f}s {line["syllables"]:2d}字 需 {needs:.2f}字/秒  {line["say"]}{flag}')
+        print(f'{line["n"]:3d} {line["start"]:7.2f} {line["window"]:5.2f}s {line["units"]:3d}{cfg.unit} 需 {needs:.2f}{cfg.unit}/秒  {line["say"]}{flag}')
         if re.sub(r'\s', '', line['say']) != re.sub(r'\s', '', line['text']):
             print(f'{"":35s}字幕原文：{line["text"]}')
     print(f'共 {len(script)} 句' + (f'，其中 {tight} 句多半放不下' if tight else '') + '。数字和字母的念法不对时，在 VOICE 的 say 里写明')
@@ -132,6 +166,14 @@ def trim(samples, before=0.04, after=0.09):
     return samples[max(0, loud[0] - round(before * RATE)):min(len(samples), loud[-1] + round(after * RATE))].copy()
 
 
+def at_rate(samples, rate):
+    """Samples at the rate everything here is measured at."""
+    if rate == RATE:
+        return np.asarray(samples, dtype=np.float32).reshape(-1)
+    import soxr
+    return np.ascontiguousarray(soxr.resample(np.asarray(samples, dtype=np.float32).reshape(-1), rate, RATE, quality='HQ'), dtype=np.float32)
+
+
 def write_wav(path, samples, rate=RATE):
     import soundfile
     soundfile.write(str(path), np.clip(samples, -1, 1), rate, subtype='PCM_16')
@@ -143,12 +185,38 @@ def read_wav(path):
     return samples, rate
 
 
+def pitch_of(samples):
+    """The pitch of a clip, frame by frame (Hz), and which frames were voiced. librosa where it is installed; else the
+    same measurement by autocorrelation, so that the engines that do not need the speech Python are not made to need it."""
+    try:
+        import librosa
+        low = librosa.resample(samples, orig_sr=RATE, target_sr=16000)
+        pitch, voiced, _ = librosa.pyin(low, fmin=90, fmax=420, sr=16000, frame_length=1024, hop_length=160)
+        return pitch[voiced & np.isfinite(pitch)]
+    except ImportError:
+        import soxr
+        low = soxr.resample(samples, RATE, 16000, quality='HQ').astype(np.float32) if len(samples) > 1600 else np.zeros(1600, dtype=np.float32)
+        frame, hop = 1024, 160
+        count = max(0, (len(low) - frame) // hop + 1)
+        if not count:
+            return np.zeros(0)
+        frames = np.lib.stride_tricks.as_strided(low, shape=(count, frame), strides=(low.strides[0] * hop, low.strides[0])).copy()
+        energy = np.sqrt((frames ** 2).mean(axis=1))
+        frames = frames * np.hanning(frame)
+        spectrum = np.fft.rfft(frames, n=2 * frame, axis=1)
+        autocorrelation = np.fft.irfft(np.abs(spectrum) ** 2, axis=1)[:, :frame]
+        autocorrelation /= autocorrelation[:, :1] + 1e-12
+        low_lag, high_lag = round(16000 / 420), min(frame - 1, round(16000 / 90))
+        window = autocorrelation[:, low_lag:high_lag]
+        best = np.argmax(window, axis=1)
+        strength = window[np.arange(count), best]
+        voiced = (strength > 0.3) & (energy > max(0.004, 0.05 * energy.max()))
+        return 16000 / (best[voiced] + low_lag)
+
+
 def measure(samples):
     """How a clip sounds, in numbers: its pitch (median, and how far it moves, in semitones), its level and its pauses."""
-    import librosa
-    low = librosa.resample(samples, orig_sr=RATE, target_sr=16000)
-    pitch, voiced, _ = librosa.pyin(low, fmin=90, fmax=420, sr=16000, frame_length=1024, hop_length=160)
-    pitch = pitch[voiced & np.isfinite(pitch)]
+    pitch = pitch_of(samples)
     frames = samples[:len(samples) // 480 * 480].reshape(-1, 480)
     levels = np.sqrt((frames ** 2).mean(axis=1))
     active = levels[levels > 0.01]
@@ -168,6 +236,7 @@ def tempo(samples, factor):
     return np.frombuffer(out, dtype='<f4').copy()
 
 
+# ---------- Qwen: the local speech model ----------
 def load(model_folder, max_seq_len=896):
     free = subprocess.run(['nvidia-smi', '--query-gpu=memory.free', '--format=csv,noheader,nounits'], capture_output=True, text=True)
     free = max((int(value) for value in free.stdout.split() if value.isdigit()), default=None) if free.returncode == 0 else None
@@ -200,13 +269,16 @@ def anchor_text():
         return json.loads(listing.read_text(encoding='utf-8'))['text']
     if cfg.anchor_text:
         return spoken(cfg.anchor_text)
-    text = spoken(f'这是{cfg.title}的功能演示。') if cfg.title else '这是一段功能演示。'
+    facts = demo_text.LANGUAGES[cfg.tongue]
+    least, most = facts['anchor']
+    text = spoken(facts['title_demo'].format(title=cfg.title) if cfg.title else facts['demo'])
     for line in lines()[0]:  # goes on with the first captions that are plain sentences, until it is long enough to carry a voice
-        if syllables(text) >= 34:
+        if units(text) >= least:
             break
-        if not re.search('[A-Za-z0-9]', line['say']) and line['say'][-1] in '。！？' and syllables(text + line['say']) <= 50:
-            text += line['say']
-    return text if syllables(text) >= 34 else text + STOCK
+        plain = not re.search(r'\d', line['say']) and (cfg.tongue != 'zh' or not re.search('[A-Za-z]', line['say']))
+        if plain and line['say'][-1:] in '。！？.!?' and units(text + line['say']) <= most:
+            text += ('' if cfg.tongue == 'zh' or text.endswith(' ') else ' ') + line['say']
+    return text if units(text) >= least else text + ('' if cfg.tongue == 'zh' else ' ') + facts['stock']
 
 
 def candidates():
@@ -220,14 +292,14 @@ def candidates():
             raise SystemExit(f'{folder} 里的参考音是按别的设置做的（{made.get("speaker")}：{made["text"]}）。要按现在的设置重做，先删掉 {folder}、anchor.wav 和 anchor.json')
     folder.mkdir(parents=True, exist_ok=True)
     text = anchor_text()
-    model, count, rows = None, syllables(text), []
+    model, count, rows = None, units(text), []
     for style_index, style in enumerate(cfg.styles):
         for seed in range(cfg.candidates):
             path = folder / f'{style_index}-{seed}.wav'
             if not path.is_file():
                 model = model or load(need('tts_custom', HOW), 768)
                 torch.manual_seed(1000 + seed)
-                wavs, rate = model.generate_custom_voice(text=text, speaker=cfg.speaker, language=cfg.language, instruct=style,
+                wavs, rate = model.generate_custom_voice(text=text, speaker=cfg.speaker, language=cfg.qwen_language, instruct=style,
                                                          max_new_tokens=math.ceil(count / 2.4 * 12.5) + 40, **{**SAMPLING, 'temperature': 0.7})
                 assert rate == RATE and len(wavs) == 1
                 path.with_suffix('.heard.json').unlink(missing_ok=True)
@@ -273,9 +345,12 @@ def take_anchor(name):
 
 
 def said_already(path, line):
-    """Spoken already, and with the words the caption has now."""
+    """Spoken already, and with the words the caption has now, and by the engine as it is set now."""
     facts = path.with_suffix('.json')
-    return facts.is_file() and path.is_file() and json.loads(facts.read_text(encoding='utf-8')).get('say') == line['say']
+    if not (facts.is_file() and path.is_file()):
+        return False
+    remembered = json.loads(facts.read_text(encoding='utf-8'))
+    return remembered.get('say') == line['say'] and remembered.get('signature', signature()) == signature()
 
 
 def clone(model, close, line, reference, reference_text, path, seed):
@@ -284,25 +359,108 @@ def clone(model, close, line, reference, reference_text, path, seed):
     for old in (path, path.with_suffix('.json'), path.with_suffix('.heard.json')):
         old.unlink(missing_ok=True)
     torch.manual_seed(seed)
-    wavs, rate = model.generate_voice_clone(text=line['say'], language=cfg.language, ref_audio=str(reference), ref_text=reference_text,
+    wavs, rate = model.generate_voice_clone(text=line['say'], language=cfg.qwen_language, ref_audio=str(reference), ref_text=reference_text,
                                             xvec_only=False, append_silence=True, non_streaming_mode=True,
-                                            max_new_tokens=math.ceil(line['syllables'] / 2.2 * 12.5) + 40, **SAMPLING)
+                                            max_new_tokens=math.ceil(line['units'] / 2.2 * 12.5) + 40, **SAMPLING)
     assert rate == RATE and len(wavs) == 1
     try:
         samples = trim(wavs[0])
     except ValueError:
         return None
     write_wav(path, samples)
-    facts = {**measure(samples), 'pace': round(line['syllables'] / (len(samples) / RATE), 2), 'same_voice': close(samples, reference), 'n': line['n'], 'say': line['say']}
+    facts = {**measure(samples), 'pace': round(line['units'] / (len(samples) / RATE), 2), 'same_voice': close(samples, reference), 'n': line['n'], 'say': line['say'],
+             'signature': signature()}
     facts['speaking'] = round(facts['pace'] / (1 - facts['pauses']), 2)  # the pace without the pauses at the commas: what a listener takes as the speed
     path.with_suffix('.json').write_text(json.dumps(facts, ensure_ascii=False), encoding='utf-8')
     return facts
 
 
-# ---------- step 2: which reference clip ----------
+# ---------- step 1 (other engines): the reference clip ----------
+def signature():
+    """What a take depends on: the engine, the voice, the model, the speed of the voice, the language. A take made under
+    another signature is not the same voice and is spoken again."""
+    return {'engine': cfg.engine, 'speaker': cfg.speaker, 'model': cfg.model or '', 'base_url': cfg.base_url or '', 'language': cfg.tongue}
+
+
+def plain_engine():
+    return demo_tts.make(cfg.engine, cfg.tongue, speaker=cfg.speaker, model=cfg.model, base_url=cfg.base_url, api_key=cfg.api_key,
+                         language_code=cfg.language_code)
+
+
+def plain_anchor():
+    """One clip of the voice, from the same text the Qwen reference says: what 'the same voice' means for the rest, and
+    the pace the voice comes out at (so that each line is asked for at the pace the video wants)."""
+    facts_path, clip = cfg.folder / 'anchor.json', cfg.folder / 'anchor.wav'
+    if facts_path.is_file() and clip.is_file() and json.loads(facts_path.read_text(encoding='utf-8')).get('signature') == signature():
+        print(f'参考音已经有了：{clip}', flush=True)
+        return
+    text = anchor_text()
+    try:
+        engine = plain_engine()
+        samples, rate = engine.speak(text, seed=4242, speed=1.0, instruct=cfg.instructions)
+    except demo_tts.TTSError as error:
+        raise SystemExit(f'参考音没有念出来：{error}')
+    samples = trim(at_rate(samples, rate))
+    write_wav(clip, samples)
+    facts = {**measure(samples), 'text': text, 'signature': signature(), 'speaker': cfg.speaker, 'file': 'anchor.wav', 'n': None}
+    facts['pace'] = round(units(text) / (len(samples) / RATE), 2)
+    if getattr(engine, 'takes_speed', True):
+        facts['speed'] = round(min(1.35, max(0.8, cfg.pace / max(0.5, facts['pace']))), 3)   # the engine is asked to speak this much faster than it does by itself
+    else:
+        facts['speed'] = 1.0   # this one tells its own pace; a line that does not fit is sped up at the mixing, and check says when it is too much
+    facts_path.write_text(json.dumps(facts, ensure_ascii=False, indent=1), encoding='utf-8')
+    print(f'参考音：{cfg.speaker}（{demo_tts.ENGINES[cfg.engine]["name"]}；自身语速 {facts["pace"]} {cfg.unit}/秒，音高 {facts["pitch"]} Hz'
+          + (f'，念出来按 {facts["speed"]} 倍速' if getattr(engine, 'takes_speed', True) else '；这个服务没有语速参数，放不下时在混音时加快')
+          + '）', flush=True)
+    if cfg.engine == 'kokoro':
+        engine.load()
+        missing = engine.unknown(' '.join([text] + [line['say'] for line in lines()[0]]), cfg.tongue)
+        if missing:
+            print('注意：Kokoro 的词表里没有这些词，念的时候会跳过：' + '、'.join(missing[:20]) + ('…' if len(missing) > 20 else '') +
+                  '。在 VOICE 的 say 里写它们的念法，例如 {"API": "A P I"}', flush=True)
+
+
+def plain_takes(count, only=None):
+    """Every line, spoken by the engine again and again; what can be measured and what it is to say is written next to it."""
+    facts_path = cfg.folder / 'anchor.json'
+    if not facts_path.is_file():
+        raise SystemExit('还没有参考音：demo_voice.py anchor')
+    reference = json.loads(facts_path.read_text(encoding='utf-8'))
+    if reference.get('signature') != signature():
+        raise SystemExit('参考音是按别的音色做的：删掉 voice/anchor.wav、voice/anchor.json 和 voice/takes，或运行 demo_voice.py anchor')
+    speed = float(reference.get('speed', 1.0))
+    folder = cfg.folder / 'takes'
+    folder.mkdir(parents=True, exist_ok=True)
+    wanted = [(line, take) for line in lines()[0] if not only or line['n'] in only for take in range(count) if not said_already(folder / f'{line["n"]:03d}-{take}.wav', line)]
+    if not wanted:
+        return
+    engine = plain_engine()
+    failures = 0
+    for done, (line, take) in enumerate(wanted, 1):
+        try:
+            samples, rate = engine.speak(line['say'], seed=7000 + 37 * line['n'] + take, speed=speed, instruct=cfg.instructions)
+            samples = trim(at_rate(samples, rate))
+        except demo_tts.TTSError as error:
+            failures += 1
+            print(f'[{done}/{len(wanted)}] 第 {line["n"]} 句第 {take} 遍没有念出来：{error}', flush=True)
+            if failures >= max(3, len(wanted) // 4):
+                raise SystemExit('多半的句子都念不出来：看上面的原因，改好后再运行同一条命令，做完的部分不会重做')
+            continue
+        path = folder / f'{line["n"]:03d}-{take}.wav'
+        for old in (path, path.with_suffix('.json'), path.with_suffix('.heard.json')):
+            old.unlink(missing_ok=True)
+        write_wav(path, samples)
+        facts = {**measure(samples), 'pace': round(line['units'] / (len(samples) / RATE), 2), 'same_voice': 1.0, 'n': line['n'], 'say': line['say'],
+                 'signature': signature()}
+        facts['speaking'] = round(facts['pace'] / (1 - facts['pauses']), 2)
+        path.with_suffix('.json').write_text(json.dumps(facts, ensure_ascii=False), encoding='utf-8')
+        print(f'[{done}/{len(wanted)}] {line["n"]:03d}-{take} ' + json.dumps({key: value for key, value in facts.items() if key not in ('say', 'n', 'signature')}, ensure_ascii=False), flush=True)
+
+
+# ---------- step 2: which reference clip (Qwen) ----------
 def wanted_pace(script):
     """The pace the narration should have, and what the captions of this video ask for: the first, or the second where that is more."""
-    needed = float(np.median([line['syllables'] / max(0.3, line['window'] - cfg.lead - cfg.gap) for line in script]))
+    needed = float(np.median([line['units'] / max(0.3, line['window'] - cfg.lead - cfg.gap) for line in script]))
     return max(cfg.pace, needed), needed
 
 
@@ -328,8 +486,8 @@ def shortlist(rows, target, count=4):
 
 def trial_lines(script):
     """The lines a reference clip is tried on: the three with the least time for what they say, and three ordinary ones."""
-    needs = lambda line: line['syllables'] / max(0.3, line['window'] - cfg.lead - cfg.gap)
-    order = sorted([line for line in script if line['syllables'] >= 8] or script, key=needs)
+    needs = lambda line: line['units'] / max(0.3, line['window'] - cfg.lead - cfg.gap)
+    order = sorted([line for line in script if line['units'] >= 8] or script, key=needs)
     middle = len(order) // 2
     return sorted({line['n']: line for line in order[-3:] + order[max(0, middle - 1):middle + 2]}.values(), key=lambda line: line['n'])
 
@@ -388,15 +546,17 @@ def compare():
         raise SystemExit('试念没有结果：demo_voice.py trial')
     (cfg.folder / 'trial.json').write_text(json.dumps({'pace_wanted': round(target, 2), 'lines': sorted({clip_n for clip_n in script if list((cfg.folder / 'trial').glob(f'*_{clip_n:03d}-*.wav'))}), 'rows': rows},
                                                       ensure_ascii=False, indent=1), encoding='utf-8')
-    print(f'想要的语速 {target:.2f} 字/秒（字幕留出的时间折合 {needed:.2f}）', flush=True)
+    print(f'想要的语速 {target:.2f} {cfg.unit}/秒（字幕留出的时间折合 {needed:.2f}）', flush=True)
     for row in rows:
-        print(f'{row["candidate"]:>5s}  自身语速 {row["own_pace"]:.2f} → 念出来 {row["pace"]:.2f} 字/秒（净 {row["speaking"]:.2f}）  要加快的 {row["sped_up"]}/{row["clips"]}（最多 {row["faster"]:.3f} 倍）  '
+        print(f'{row["candidate"]:>5s}  自身语速 {row["own_pace"]:.2f} → 念出来 {row["pace"]:.2f} {cfg.unit}/秒（净 {row["speaking"]:.2f}）  要加快的 {row["sped_up"]}/{row["clips"]}（最多 {row["faster"]:.3f} 倍）  '
               f'起伏 {row["pitch_moves"]:.2f}  念错 {row["wrong"]:.3f}  同声 {row["voice"]}  代价 {row["cost"]}', flush=True)
     return rows
 
 
 # ---------- step 3: every line, several times ----------
 def takes(count, only=None):
+    if cfg.engine != 'qwen':
+        return plain_takes(count, only)
     reference = json.loads((cfg.folder / 'anchor.json').read_text(encoding='utf-8'))
     folder = cfg.folder / 'takes'
     folder.mkdir(parents=True, exist_ok=True)
@@ -408,30 +568,10 @@ def takes(count, only=None):
     for done, (line, take) in enumerate(wanted, 1):
         facts = clone(model, close, line, cfg.folder / 'anchor.wav', reference['text'], folder / f'{line["n"]:03d}-{take}.wav', 7000 + 37 * line['n'] + take)
         if facts:
-            print(f'[{done}/{len(wanted)}] {line["n"]:03d}-{take} ' + json.dumps({key: value for key, value in facts.items() if key not in ('say', 'n')}, ensure_ascii=False), flush=True)
+            print(f'[{done}/{len(wanted)}] {line["n"]:03d}-{take} ' + json.dumps({key: value for key, value in facts.items() if key not in ('say', 'n', 'signature')}, ensure_ascii=False), flush=True)
 
 
 # ---------- step 4: what was said, and in whose voice ----------
-def sounds(text):
-    """A text as the row of its syllables, so that two texts that sound the same compare as equal. A character that has
-    several readings stands for all of them: which one is meant cannot be told from the writing, so that is left to the ear."""
-    from pypinyin import Style, pinyin
-    out = []
-    for part in re.findall('[' + HAN + ']+|[A-Za-z][A-Za-z ]*', spoken(text)):
-        out += [frozenset([part.replace(' ', '').lower()])] if part[0].isascii() else [frozenset(readings) for readings in pinyin(part, style=Style.NORMAL, heteronym=True)]
-    return out
-
-
-def distance(a, b):
-    """How many syllables have to be changed, dropped or added to get from one row to the other."""
-    row = list(range(len(b) + 1))
-    for i, x in enumerate(a, 1):
-        previous, row[0] = row[0], i
-        for j, y in enumerate(b, 1):
-            previous, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, previous + (not x & y))
-    return row[-1]
-
-
 def voice_print():
     """Turns a clip into what tells one speaker from another (a speaker-verification model, not the speech model's own measure); None where it is not installed."""
     model_file = where('voiceprint')
@@ -468,8 +608,14 @@ def as_heard(path):
     return np.ascontiguousarray(samples if rate == 16000 else soxr.resample(samples, rate, 16000, quality='HQ'), dtype=np.float32)
 
 
+WHISPER_PROMPTS = {'zh': '以下是普通话的句子，介绍{title}。', 'en': 'This is a narration that introduces {title}.', 'ja': 'これは{title}の機能紹介です。',
+                   'ko': '이것은 {title} 기능 소개입니다.', 'de': 'Dies ist eine Vorstellung von {title}.', 'fr': 'Ceci présente {title}.',
+                   'es': 'Esto presenta {title}.', 'it': 'Questa è una presentazione di {title}.', 'pt': 'Esta é uma apresentação de {title}.',
+                   'ru': 'Это презентация {title}.'}
+
+
 def hear(files):
-    """Writes next to each clip what is heard in it, how many syllables of what was to be said differ, and how close the voice is to its reference clip."""
+    """Writes next to each clip what is heard in it, how much of what was to be said differs, and how close the voice is to its reference clip."""
     files = [Path(path) for path in files if not Path(path).with_suffix('.heard.json').is_file()]
     if not files:
         return
@@ -477,21 +623,20 @@ def hear(files):
     whisper = str(need('whisper', f'python3 {HERE / "demo_env.py"} setup --models'))
     try:
         model = WhisperModel(whisper, device='cuda', compute_type='float16')
-        list(model.transcribe(np.zeros(16000, dtype=np.float32), language='zh')[0])
+        list(model.transcribe(np.zeros(16000, dtype=np.float32), language=cfg.tongue)[0])
     except Exception:
         model = WhisperModel(whisper, device='cpu', compute_type='int8', cpu_threads=8)
     script = {line['n']: line['say'] for line in lines()[0]}
+    prompt = WHISPER_PROMPTS.get(cfg.tongue, '{title}').format(title=cfg.title or 'an app')
     print_of, prints = voice_print(), {}
     for path in files:
         said, reference = told(path, script)
         if not said:
             continue
-        parts, _ = model.transcribe(as_heard(path), language='zh', beam_size=5, temperature=0.0, condition_on_previous_text=False,
-                                    initial_prompt=f'以下是普通话的句子，介绍{cfg.title or "一个软件"}。')
+        parts, _ = model.transcribe(as_heard(path), language=cfg.tongue, beam_size=5, temperature=0.0, condition_on_previous_text=False, initial_prompt=prompt)
         text = ''.join(part.text for part in parts).strip()
-        wanted = sounds(said)
-        differs = distance(wanted, sounds(text))
-        facts = {'heard': text, 'differs': differs, 'wrong': round(differs / max(1, len(wanted)), 4)}
+        differs, total = demo_text.differs(said, text, cfg.tongue, cfg.say)
+        facts = {'heard': text, 'differs': differs, 'wrong': round(differs / max(1, total), 4)}
         if print_of and reference and reference.is_file():
             if reference not in prints:
                 prints[reference] = print_of(reference)
@@ -609,7 +754,7 @@ def build():
         samples = samples[:max(0, len(track) - round((line['start'] + lead) * RATE))]
         report.append({'n': line['n'], 'take': path.stem, 'takes': facts['of'], 'as_right': facts['as_right'], 'caption': round(line['start'], 2), 'window': round(line['window'], 2),
                        'start': round(line['start'] + lead, 3), 'seconds': round(len(samples) / RATE, 3), 'after': round(line['window'] - lead - len(samples) / RATE, 3),
-                       'faster': round(faster, 3), 'pace': round(line['syllables'] / (len(samples) / RATE), 2), 'speaking': round(facts['speaking'] * faster, 2),
+                       'faster': round(faster, 3), 'pace': round(line['units'] / (len(samples) / RATE), 2), 'speaking': round(facts['speaking'] * faster, 2),
                        'pitch': facts['pitch'], 'pitch_moves': facts['pitch_moves'], 'same_voice': facts.get('voice', facts['same_voice']), 'longest_pause': facts['longest_pause'],
                        'level': loudness(samples, RATE)['lufs'], 'wrong': round(facts['wrong'], 3), 'say': line['say'], 'heard': facts['heard'], 'samples': samples})
     middle = float(np.median([row['level'] for row in report]))
@@ -638,7 +783,8 @@ def build():
     subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', str(cfg.video), '-i', str(cfg.folder / 'voice.wav'), '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
                     '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', str(cfg.out)], check=True)
     reference = json.loads((cfg.folder / 'anchor.json').read_text(encoding='utf-8'))
-    (cfg.folder / 'report.json').write_text(json.dumps({'video': str(cfg.video), 'out': str(cfg.out), 'reference': reference['file'], 'speaker': reference.get('speaker'), 'typical': typical, 'loudness': after,
+    (cfg.folder / 'report.json').write_text(json.dumps({'video': str(cfg.video), 'out': str(cfg.out), 'engine': cfg.engine, 'speaker': cfg.speaker, 'language': cfg.tongue,
+                                                        'reference': reference.get('file'), 'typical': typical, 'loudness': after,
                                                         'gain': round(cfg.loudness - before['lufs'], 2), 'peaks_turned_down': peaks, 'lines': report}, ensure_ascii=False, indent=1), encoding='utf-8')
     return report, typical, after
 
@@ -691,7 +837,7 @@ def check():
         begins, ends = line['start'] + inside[0] / 100, line['start'] + (inside[-1] + 1) / 100
         spoken_frames[first + inside[0]:first + inside[-1] + 1] = True
         row = {'n': line['n'], 'begins': round(begins - line['start'], 2), 'ends_before': round(line['start'] + line['window'] - ends, 2), 'seconds': round(ends - begins, 2),
-               'pace': round(line['syllables'] / (ends - begins), 2), 'faster': planned['faster']}
+               'pace': round(line['units'] / (ends - begins), 2), 'faster': planned['faster']}
         rows.append(row)
         if row['begins'] < cfg.lead_min - 0.03 or row['ends_before'] < cfg.gap_min - 0.03:
             problems.append(f'第 {line["n"]} 句贴着字幕的边：字幕出现后 {row["begins"]} 秒开口，下一条字幕前 {row["ends_before"]} 秒收住')
@@ -727,7 +873,7 @@ def check():
         problems.append('成片里的声音和混音轨对不上')
     if rows:
         spread = lambda key: [min(row[key] for row in rows), float(np.median([row[key] for row in rows])), max(row[key] for row in rows)]
-        facts['句子'] = {'句数': len(rows), '听写逐音节一致': len(rows) - len(misheard), '成片语速（字/秒）': spread('pace'), '加快过的句数': sum(row['faster'] > 1.001 for row in rows),
+        facts['句子'] = {'句数': len(rows), '听写逐音节一致': len(rows) - len(misheard), f'成片语速（{cfg.unit}/秒）': spread('pace'), '加快过的句数': sum(row['faster'] > 1.001 for row in rows),
                        '最多加快到': max(row['faster'] for row in rows), '开口距字幕出现（秒）': [min(row['begins'] for row in rows), max(row['begins'] for row in rows)],
                        '收住距下一条字幕（秒）最少': min(row['ends_before'] for row in rows), '各句响度（LUFS）': [min(row['lufs'] for row in rows), max(row['lufs'] for row in rows)]}
         if all('voice' in row for row in rows):
@@ -741,13 +887,13 @@ def show_check():
     facts, problems, misheard = check()
     print(json.dumps(facts, ensure_ascii=False, indent=1))
     for row in misheard:
-        print(f'听写有出入 第 {row["n"]} 句（{row["at"]} 秒，差 {row["differs"]} 个音节）\n    稿：{row["say"]}\n    听：{row["heard"]}')
+        print(f'听写有出入 第 {row["n"]} 句（{row["at"]} 秒，差 {row["differs"]} 个{cfg.unit}）\n    稿：{row["say"]}\n    听：{row["heard"]}')
     print('\n'.join(problems) or '没有发现问题')
 
 
 def show_build():
     report, typical, sound = build()
-    print(json.dumps({**typical, **sound}, ensure_ascii=False))
+    print(json.dumps({**typical, 'engine': cfg.engine, 'speaker': cfg.speaker, **sound}, ensure_ascii=False))
     for row in report:
         print(f'{row["n"]:3d} {row["take"]} {row["start"]:7.2f} {row["seconds"]:5.2f}/{row["window"]:5.2f}s 加快 {row["faster"]:.3f} 语速 {row["pace"]:.2f} 净 {row["speaking"]:.2f} 音高 {row["pitch"]:5.1f} '
               f'起伏 {row["pitch_moves"]:.2f} 同声 {row["same_voice"]:.3f} 错 {row["wrong"]:.3f} 可选 {row["as_right"]}/{row["takes"]}')
@@ -755,7 +901,7 @@ def show_build():
 
 # ---------- the steps in order ----------
 def run(step, *arguments, python):
-    """One step of this script as a program of its own: the speech model has its own Python, and what a step loads onto the graphics card is gone when it ends."""
+    """One step of this script as a program of its own: the speech model may have its own Python, and what a step loads onto the graphics card is gone when it ends."""
     quiet = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'TOKENIZERS_PARALLELISM': 'false'}
     command = [str(python), __file__, step, *(str(argument) for argument in arguments), '--work', str(cfg.work)]
     command += (['--video', str(cfg.video)] if cfg.video else []) + (['--out', str(cfg.out)] if cfg.out else [])
@@ -771,42 +917,49 @@ def everything(speaks):
     the_video()
     if not lines()[0]:
         raise SystemExit('时间线里没有要念的字幕')
+    qwen = cfg.engine == 'qwen'
+    print(f'配音：{demo_tts.ENGINES[cfg.engine]["name"]}（{demo_tts.ENGINES[cfg.engine]["place"]}），{demo_text.LANGUAGES[cfg.tongue]["name"]}，音色 {cfg.speaker}', flush=True)
     show_lines()
     chosen = cfg.folder / 'anchor.json'
-    if cfg.anchor and chosen.is_file() and json.loads(chosen.read_text(encoding='utf-8')).get('file') != f'{cfg.anchor}.wav':
-        take_anchor(cfg.anchor)
-    if not chosen.is_file():
-        run('_candidates', python=speaks())
-        run('hear', *clips('anchor'), python=sys.executable)
-        if cfg.anchor:
+    runner = speaks() if qwen else sys.executable
+    if qwen:
+        if cfg.anchor and chosen.is_file() and json.loads(chosen.read_text(encoding='utf-8')).get('file') != f'{cfg.anchor}.wav':
             take_anchor(cfg.anchor)
-        else:
-            run('_trial', python=speaks())
-            run('hear', *clips('trial'), python=sys.executable)
-            take_anchor(compare()[0]['candidate'])
-    run('_takes', cfg.takes, python=speaks())
+        if not chosen.is_file():
+            run('_candidates', python=runner)
+            run('hear', *clips('anchor'), python=sys.executable)
+            if cfg.anchor:
+                take_anchor(cfg.anchor)
+            else:
+                run('_trial', python=runner)
+                run('hear', *clips('trial'), python=sys.executable)
+                take_anchor(compare()[0]['candidate'])
+    elif not chosen.is_file() or json.loads(chosen.read_text(encoding='utf-8')).get('signature') != signature():
+        run('_anchor_plain', python=runner)
+        run('hear', *clips('anchor'), python=sys.executable)
+    run('_takes', cfg.takes, python=runner)
     run('hear', *clips('takes'), python=sys.executable)
     script = lines()[0]
     again = [line['n'] for line in script if min((facts['wrong'] for _, facts in table(script).get(line['n'], [])), default=1) > 0]
     if again:  # no take of these says the text right: once more, as many times again
         print(f'没有一遍念对的句子：{again}，各再念 {cfg.takes} 遍', flush=True)
-        run('_takes', 2 * cfg.takes, *again, python=speaks())
+        run('_takes', 2 * cfg.takes, *again, python=runner)
         run('hear', *clips('takes'), python=sys.executable)
     show_build()
     show_check()
     reference = json.loads(chosen.read_text(encoding='utf-8'))
-    print(f'\n配音版：{cfg.out}\n参考音：{reference["file"][:-4]}（{cfg.folder / "anchor.wav"}；候选在 {cfg.folder / "anchor"}，听了想换：demo_voice.py anchor 名字 --work …，再运行一遍）\n'
+    print(f'\n配音版：{cfg.out}\n参考音：{reference.get("file") or reference.get("speaker")}（{cfg.folder / "anchor.wav"}），引擎 {cfg.engine}，音色 {cfg.speaker}，语言 {cfg.tongue}\n'
           f'每句取了哪一遍、怎么放的：{cfg.folder / "report.json"}；核验：{cfg.folder / "check.json"}；成片里切出来的每一句：{cfg.folder / "final"}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('step', nargs='?', default='all', metavar='step', choices=['all', 'lines', 'anchor', 'trial', 'takes', 'hear', 'build', 'check', '_candidates', '_trial', '_takes'],
+    parser.add_argument('step', nargs='?', default='all', metavar='step', choices=['all', 'lines', 'anchor', 'trial', 'takes', 'hear', 'build', 'check', '_candidates', '_trial', '_takes', '_anchor_plain'],
                         help='all (default), lines, anchor [name], trial, takes [line numbers], hear [files], build, check')
     parser.add_argument('rest', nargs='*')
     parser.add_argument('--work', type=Path, required=True, help='the working folder of the recording')
     parser.add_argument('--video', type=Path, help='the video to narrate (default: the one demo_render.py wrote last)')
-    parser.add_argument('--out', type=Path, help='the narrated video (default: next to the video, its name with -配音版)')
+    parser.add_argument('--out', type=Path, help='the narrated video (default: next to the video, its name with -配音版 / -narrated)')
     options = parser.parse_args()
     inner = options.step.startswith('_')
     if not inner and any(importlib.util.find_spec(module) is None for module in ('soundfile', 'soxr', 'scipy', 'faster_whisper', 'pypinyin')):
@@ -820,21 +973,26 @@ if __name__ == '__main__':
     if options.step == 'lines':
         show_lines()
     elif options.step == 'anchor':
-        if options.rest:
+        if cfg.engine != 'qwen':
+            plain_anchor()
+            run('hear', *clips('anchor'), python=sys.executable)
+        elif options.rest:
             take_anchor(options.rest[0])
         else:
             run('_candidates', python=speaks())
             run('hear', *clips('anchor'), python=sys.executable)
             for row in sorted(known()['rows'], key=lambda row: row['pace']):
-                print(f'{row["file"][:-4]:>5s}  语速 {row["pace"]:.2f} 字/秒  音高 {row["pitch"]:5.1f} Hz  起伏 {row["pitch_moves"]:.2f}  最长停顿 {row["longest_pause"]:.2f}s  念错 {row.get("wrong", "?")}  '
+                print(f'{row["file"][:-4]:>5s}  语速 {row["pace"]:.2f} {cfg.unit}/秒  音高 {row["pitch"]:5.1f} Hz  起伏 {row["pitch_moves"]:.2f}  最长停顿 {row["longest_pause"]:.2f}s  念错 {row.get("wrong", "?")}  '
                       f'与多数候选的声纹相似度 {row.get("voice", "?")}' + ('' if usual(row, known()['rows']) else '  ← 不是通常的音色'))
     elif options.step == 'trial':
+        if cfg.engine != 'qwen':
+            raise SystemExit('试念只在 Qwen 上有：别的引擎用固定的音色，不需要挑参考音')
         run('hear', *clips('anchor'), python=sys.executable)
         run('_trial', python=speaks())
         run('hear', *clips('trial'), python=sys.executable)
         print(f'代价最小的排在最前：demo_voice.py anchor {compare()[0]["candidate"]} --work …')
     elif options.step == 'takes':
-        run('_takes', cfg.takes, *options.rest, python=speaks())
+        run('_takes', cfg.takes, *options.rest, python=speaks() if cfg.engine == 'qwen' else sys.executable)
     elif options.step == 'hear':
         hear(options.rest or clips('takes'))
     elif options.step == 'build':
@@ -847,5 +1005,7 @@ if __name__ == '__main__':
         trial()
     elif options.step == '_takes':
         takes(int(options.rest[0]), [int(number) for number in options.rest[1:]] or None)
+    elif options.step == '_anchor_plain':
+        plain_anchor()
     else:
         everything(speaks)

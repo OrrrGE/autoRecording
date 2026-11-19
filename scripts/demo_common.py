@@ -1,11 +1,13 @@
-"""What the scripts of this skill share: where the skill keeps its own things on this machine, and where the tools it needs are.
+"""What the scripts of this skill share: where the skill keeps its own things on this machine, where the tools it needs are, and the keys of remote services.
 
-The skill's own things live in one folder, ~/.cache/auto-demo-recording unless AUTO_DEMO_HOME names another:
+The skill's own things live in one folder, ~/.cache/auto-demo-recording unless AUTO_DEMO_HOME names another (the same
+path on Linux, macOS and Windows: C:\\Users\\<you>\\.cache\\auto-demo-recording):
 
     venv/            the Python that records, draws and checks (demo_env.py setup makes it)
-    models/          whisper-large-v3 and campplus_zh.onnx for checking; the two speech models, if they were put here
+    models/          whisper-large-v3 and campplus_zh.onnx for checking; the speech models and Kokoro, if put here
     tts-venv/        a Python with the speech model's packages, if one was made here
     settings.json    where things are on this machine when they are somewhere else
+    secrets.json     the keys of remote speech services (written by demo_env.py key, mode 600)
 
 Each thing is looked for in this order: its environment variable, settings.json, the folder above, the usual
 download places. The first that exists is taken.
@@ -14,24 +16,65 @@ from __future__ import annotations
 
 import json
 import os
-import re
+import shutil
+import stat
+import sys
 from pathlib import Path
 
 HOME = Path(os.environ.get('AUTO_DEMO_HOME') or Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'auto-demo-recording').expanduser()
-BIN = 'Scripts' if os.name == 'nt' else 'bin'
+WINDOWS = os.name == 'nt'
+BIN = 'Scripts' if WINDOWS else 'bin'
+EXE = '.exe' if WINDOWS else ''
 HUB = Path(os.environ.get('HF_HUB_CACHE') or Path(os.environ.get('HF_HOME') or Path.home() / '.cache/huggingface') / 'hub').expanduser()
 SPEECH = 'Qwen3-TTS-12Hz-1.7B'   # the local speech model this skill reads the captions with: its CustomVoice and its Base variant
+KOKORO = 'kokoro-multi-lang-v1_1'   # the CPU speech model: 103 voices, Chinese and English
 
 # name: (environment variable, what the path must contain to count, where it is by default)
 THINGS = {
-    'python': ('DEMO_PYTHON', None, lambda: [HOME / 'venv' / BIN / 'python']),
+    'python': ('DEMO_PYTHON', None, lambda: [HOME / 'venv' / BIN / f'python{EXE}']),
     'chromium': ('DEMO_CHROMIUM', None, lambda: []),
-    'tts_python': ('QWEN_TTS_PYTHON', None, lambda: [HOME / 'tts-venv' / BIN / 'python']),
+    'tts_python': ('QWEN_TTS_PYTHON', None, lambda: [HOME / 'tts-venv' / BIN / f'python{EXE}']),
     'tts_custom': ('QWEN_TTS_CUSTOM', 'model.safetensors', lambda: [HOME / 'models' / f'{SPEECH}-CustomVoice', *sorted(HUB.glob(f'models--Qwen--{SPEECH}-CustomVoice/snapshots/*'))]),
     'tts_base': ('QWEN_TTS_BASE', 'model.safetensors', lambda: [HOME / 'models' / f'{SPEECH}-Base', *sorted(HUB.glob(f'models--Qwen--{SPEECH}-Base/snapshots/*'))]),
+    'kokoro': ('DEMO_KOKORO_MODEL', 'model.onnx', lambda: [HOME / 'models/kokoro-multi-lang-v1_1', HOME / 'models/kokoro-multi-lang-v1_0']),
     'whisper': ('DEMO_WHISPER', 'model.bin', lambda: [HOME / 'models/whisper-large-v3', *sorted(HUB.glob('models--Systran--faster-whisper-large-v3/snapshots/*'))]),
     'voiceprint': ('DEMO_VOICEPRINT', None, lambda: [HOME / 'models/campplus_zh.onnx']),
 }
+
+# the keys of the remote speech services: the environment variable, and the one some tools already use
+KEYS = {'openai': ('DEMO_TTS_API_KEY', 'OPENAI_API_KEY'), 'elevenlabs': ('DEMO_TTS_API_KEY', 'ELEVENLABS_API_KEY'),
+        'dashscope': ('DEMO_TTS_API_KEY', 'DASHSCOPE_API_KEY')}
+
+# browsers the recorder can use, in the order it tries them: the one named in settings.json comes before these
+if WINDOWS:
+    BROWSERS = [r'C:\Program Files\Google\Chrome\Application\chrome.exe', r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+                r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+                'chrome', 'msedge', 'chromium']
+elif sys.platform == 'darwin':
+    BROWSERS = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+                '/Applications/Chromium.app/Contents/MacOS/Chromium', '/snap/bin/chromium', 'google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge']
+else:
+    BROWSERS = ['/snap/bin/chromium', 'chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable', 'microsoft-edge']
+
+
+def browser(name):
+    """A browser as a path that exists, or the name if it is on PATH, or None."""
+    if not name:
+        return None
+    path = Path(name).expanduser()
+    if path.is_file():
+        return str(path)
+    return shutil.which(name) or (str(path) if name.startswith('/') and path.exists() else None)
+
+
+def browsers():
+    """Every browser the recorder could use, the ones it would take first."""
+    found = []
+    for name in BROWSERS:
+        path = browser(name)
+        if path and path not in found:
+            found.append(path)
+    return found
 
 
 def settings():
@@ -68,57 +111,31 @@ def need(name, how):
     return path
 
 
-# ---------- how a caption is said ----------
-# The recorder gives a caption as much time as saying it takes, and the narration says it by the same rules.
-DIGITS = '零一二三四五六七八九'
-HAN = chr(0x4E00) + '-' + chr(0x9FFF)   # the Chinese characters, for use inside [...] of a pattern
-COUNTED = '个|项|份|件|场|种|边|条|次|位|名|张|页|行|段|步|类|组|天|分钟|小时|秒|周|倍|处|遍|封|台|套|家|层|块|篇|本|句|批|轮|栏|列|人|户|笔|万|亿|千|百'
-AMOUNT = re.compile(r'\s*(?:多|余|来)?(?:' + COUNTED + '|元|字|章|节|岁|米|度|帧|例|起|门|所|间|辆|道|题|单|票|分|年|月|日|号|像素|毫秒|公里|千克|公斤|毫米|厘米|GB|MB|KB|TB|ms|px|fps|Hz|kg|km|cm|mm)')
-PAUSES = '，。；：、！？,.;:!?'
+# ---------- the keys of remote services ----------
+def secrets():
+    try:
+        return json.loads((HOME / 'secrets.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
 
 
-def cardinal(n, first=True):
-    """A whole number read as an amount: 十二, 一百零五, 一千二百, 三万零五十."""
-    if n < 10 ** 4:
-        out, gap = '', False
-        for power, unit in ((3, '千'), (2, '百'), (1, '十'), (0, '')):
-            digit = n // 10 ** power % 10
-            if digit:
-                out += ('零' if gap else '') + ('' if (power, digit) == (1, 1) and first and not out else DIGITS[digit]) + unit
-            gap = bool(out) and not digit
-        return out or DIGITS[0]
-    power, unit = (8, '亿') if n >= 10 ** 8 else (4, '万')
-    head, rest = divmod(n, 10 ** power)
-    return cardinal(head, first) + unit + (('零' if rest < 10 ** (power - 1) else '') + cardinal(rest, False) if rest else '')
+def key(provider):
+    """The key of a remote speech service: the environment variable first, then secrets.json. None when there is none."""
+    for variable in KEYS.get(provider, ('DEMO_TTS_API_KEY',)):
+        if os.environ.get(variable):
+            return os.environ[variable]
+    return secrets().get(provider) or None
 
 
-def one_by_one(digits):
-    return ''.join(DIGITS[int(digit)] for digit in digits)
-
-
-def spoken(text, say=None):
-    """A caption the way it is said in Mandarin: numbers as words, letter names apart.
-
-    `say` gives the reading of whatever these rules get wrong, e.g. {'WPS 365': 'W P S 三六五'}: its keys are found
-    whatever their case and with or without the blanks. The rules: a date, a year (digit by digit), a per cent,
-    a range, a decimal, 2 before a counting word (两), a whole number (below a hundred or before a unit as an
-    amount, else digit by digit), a short word in capitals (letter by letter).
-    """
-    for key, value in sorted((say or {}).items(), key=lambda item: -len(item[0])):
-        text = re.sub(r'\s*'.join(re.escape(part) for part in key.split()), lambda match: value, text, flags=re.IGNORECASE)
-    amount = lambda number: cardinal(int(number.split('.')[0])) + ''.join('点' + one_by_one(part) for part in number.split('.')[1:])
-    text = re.sub(r'(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)', lambda m: f'{one_by_one(m[1])}年{cardinal(int(m[2]))}月{cardinal(int(m[3]))}日', text)
-    text = re.sub(r'(?<!\d)(\d{4})\s*年', lambda m: one_by_one(m[1]) + '年', text)
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*[%％]', lambda m: '百分之' + amount(m[1]), text)
-    text = re.sub(r'(?<![\d.-])(\d{1,3})\s*[-~～—–]\s*(\d{1,3})(?![\d.-])', lambda m: f'{m[1]}到{m[2]}', text)
-    text = re.sub(r'\d+(?:\.\d+)+', lambda m: amount(m[0]), text)
-    text = re.sub(r'(?<![\d.第])(?<!第\s)2(?![\d.])\s*(?=' + COUNTED + ')', '两', text)
-    text = re.sub(r'\d+', lambda m: one_by_one(m[0]) if (m[0][0] == '0' and len(m[0]) > 1) or (len(m[0]) > 2 and not AMOUNT.match(m.string, m.end())) else cardinal(int(m[0])), text)
-    text = re.sub(r'(?<![A-Za-z])[A-Z]{2,5}(?![A-Za-z])', lambda m: ' '.join(m[0]), text)
-    text = re.sub(r'(?<=[' + HAN + r'，。；：、”])\s+(?=[' + HAN + r'“])', '', text)
-    return re.sub(r'\s{2,}', ' ', text).strip()
-
-
-def syllables(text):
-    """How many syllables saying a text takes: one for each Chinese character, one for each letter said by its name, two for another word."""
-    return len(re.findall('[' + HAN + ']', text)) + sum(len(word) if word.isupper() else 2 for word in re.findall(r'[A-Za-z]+', text))
+def remember_key(provider, value):
+    """Write down a key, readable by the owner only."""
+    kept = {**secrets(), provider: value}
+    kept = {name: secret for name, secret in kept.items() if secret}
+    HOME.mkdir(parents=True, exist_ok=True)
+    path = HOME / 'secrets.json'
+    path.write_text(json.dumps(kept, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass   # Windows keeps its own access control; the file stays under the user's profile
+    return kept

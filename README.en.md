@@ -2,10 +2,10 @@
 
 **Turn a web app into a polished, narrated demo video — from a Python story file.**
 
-This is a [Claude Code](https://claude.com/claude-code) skill (and a set of standalone Python scripts) that
-records a web app in a headless browser, draws a professional 1080p60 video around it, adds a stable Mandarin
-narration, and verifies the result numerically — no screen-recording software, no manual editing, no cloud
-services.
+This is a [Claude Code](https://claude.com/claude-code) and [Codex](https://openai.com/codex/) skill (and a set of
+standalone Python scripts) that records a web app in a headless browser, draws a professional 1080p60 video around
+it, adds a narration when one is wanted, and verifies the result numerically — no screen-recording software, no
+manual editing. Linux, Windows and macOS; a local engine keeps the audio on your machine.
 
 [中文说明](README.zh-CN.md) · [▶ 1-minute demo](https://orrrge.github.io/autoRecording/#demo-en) ·
 [Interactive page](https://orrrge.github.io/autoRecording/) · [README](README.md) ·
@@ -24,7 +24,10 @@ A single MP4 that looks like a produced product tour, not a raw screen capture:
 - **Captions** that are also the narration script.
 - **Fast-forward for waiting** — a slow job plays at 4× and the top band says so.
 - **Off-page notes** — downloads, OS dialogs and other things the page cannot show.
-- **Mandarin narration** in one consistent voice, fitted to each caption, with speech and speaker verification.
+- **Narration, optional** — ten languages (Mandarin, English, Japanese, Korean, German, French, Spanish, Italian,
+  Portuguese, Russian) in one consistent voice, fitted to each caption, with speech and speaker verification.
+- **Three kinds of engine** — local Qwen3-TTS on an NVIDIA GPU, local Kokoro on any CPU (Windows and macOS
+  included), or a remote API (OpenAI-compatible / ElevenLabs / Alibaba DashScope).
 
 Page frames and a `timeline.json` are kept separately, so captions, marks and timing can be re-rendered
 without recording again.
@@ -37,8 +40,8 @@ flowchart LR
     B --> C["frames/*.jpg<br/>timeline.json"]
     C --> D["demo_render.py<br/>Pillow + OpenCV + ffmpeg"]
     D --> E["demo.mp4<br/>silent, 1080p60"]
-    E --> F["demo_voice.py<br/>Qwen3-TTS + Whisper + CAM++"]
-    F --> G["demo-配音版.mp4<br/>narrated"]
+    E -. "only if a narration is wanted" .-> F["demo_voice.py<br/>Qwen / Kokoro / remote API + Whisper + CAM++"]
+    F --> G["demo-配音版.mp4 / demo-narrated.mp4<br/>narrated"]
     D -. "numeric checks" .-> H["check output"]
     F -. "numeric checks" .-> H
 ```
@@ -59,11 +62,15 @@ duration as the silent one.
 | | |
 | --- | --- |
 | **Script-driven** | A story is plain Python: `await d.click(...)`, `await d.say(...)`, `await d.zoom(...)` |
+| **Cross-platform** | Linux, Windows, macOS; Chrome/Edge and Microsoft YaHei on Windows, PingFang on macOS |
 | **Isolated recording** | Starts a throwaway instance on its own port and data; never touches the live service |
 | **Reusable** | Any web app Chromium can open; no framework integration |
 | **Editable after recording** | Camera, marks and captions live in `timeline.json` |
 | **Deterministic checks** | `--check` catches empty marks, wrong colours, covered labels, clipped boxes, overflowing captions, missing glyphs |
-| **Local narration** | Qwen3-TTS 1.7B on your GPU; no API keys, no per-minute fees, no audio uploaded |
+| **Narration optional** | No narration → silent video. With one → choose language and engine; the choice is written into the story |
+| **Three engines** | Local GPU (Qwen3-TTS), local CPU (Kokoro), remote API (OpenAI-compatible / ElevenLabs / DashScope) |
+| **Ten languages** | Mandarin, English, Japanese, Korean, German, French, Spanish, Italian, Portuguese, Russian |
+| **Local first** | Local engines need no API key, no per-minute fee, and upload nothing |
 | **Verifiable output** | Whisper re-listens to every line; CAM++ checks the voice; packet hashes prove the picture is untouched |
 | **Resumable** | Narration steps cache their work; rerunning only does what is missing |
 
@@ -71,11 +78,11 @@ duration as the silent one.
 
 | | Record / render | Narration |
 | --- | --- | --- |
-| OS | Linux (tested); macOS likely; Windows untested | same |
+| OS | Linux (tested), Windows, macOS | same; the Qwen engine is NVIDIA-only (so not macOS) |
 | Python | 3.10+ | 3.10–3.12 |
-| GPU | not needed | NVIDIA, ~6 GB free VRAM |
+| GPU | not needed | Qwen: NVIDIA, ~6 GB free VRAM; Kokoro and remote: none |
 | System | `ffmpeg` with libx264/aac/atempo/ebur128, Chromium, Noto Sans CJK | `ffmpeg` |
-| Models | none | Qwen3-TTS 1.7B Base + CustomVoice (~9 GB), Whisper large-v3, CAM++ |
+| Models | none | by engine: two Qwen3-TTS 1.7B models (~9 GB) / Kokoro (~400 MB) / a remote key; checks need Whisper large-v3 and CAM++ |
 
 Recording/rendering works on a CPU-only laptop. Narration is optional; without it you still get the silent
 video. Full setup details: [`references/environment.md`](references/environment.md).
@@ -91,6 +98,17 @@ git clone https://github.com/OrrrGE/autoRecording \
 
 Start a new Claude Code session and ask for a demo video. Claude reads `SKILL.md`, writes the story, and runs
 the pipeline. You can also run every script yourself — the skill is just a directory of Python files.
+
+### As a Codex skill
+
+```bash
+git clone https://github.com/OrrrGE/autoRecording \
+    ~/.agents/skills/autoDemoRecordingSkill
+# or into Codex's own folder: ~/.codex/skills/autoDemoRecordingSkill
+```
+
+Codex loads the same `SKILL.md`; `agents/openai.yaml` gives it a display name and a starting prompt. The only
+difference is the questions: Claude Code asks with selectable options, Codex asks in the conversation.
 
 ### As plain scripts
 
@@ -129,15 +147,31 @@ $PY scripts/demo_render.py --work /tmp/demo-selftest --check
 # 3. render the silent video (about 20 s on a laptop)
 $PY scripts/demo_render.py --work /tmp/demo-selftest --out /tmp/demo-selftest/selftest.mp4
 
-# 4. narrate it (needs the GPU + speech models)
-$PY scripts/demo_voice.py --work /tmp/demo-selftest
+# 4. narrate it (optional — any one of these engines)
+$PY scripts/demo_voice.py --work /tmp/demo-selftest                  # auto: Qwen on the GPU → Kokoro on the CPU → a remote key
+python3 scripts/demo_env.py setup --kokoro                           # no GPU: install Kokoro (~400 MB)
+python3 scripts/demo_env.py key openai=sk-…                          # or remember a remote key
 ```
 
-Result: `/tmp/demo-selftest/selftest.mp4` (silent) and `selftest-配音版.mp4` (narrated), 1920×1080, 60 fps,
-about 64 seconds. The render check should print no `注意：` lines and the narration check should end with
-`没有发现问题`.
+Result: `/tmp/demo-selftest/selftest.mp4` (silent) and `selftest-配音版.mp4` / `selftest-narrated.mp4` (narrated),
+1920×1080, 60 fps, about 64 seconds. The render check should print no `注意：` lines and the narration check should
+end with `没有发现问题`. The English path is exercised by `examples/selftest/story-en.py`.
 
 ## Tutorial
+
+### 0. Ask the user first
+
+Before anything else, settle three things and write the answers into the story:
+
+1. **Narration or not?** Without one, the silent video is the deliverable.
+2. **Language of the narration** (and of the captions, which it reads): Mandarin, English, Japanese, Korean, German,
+   French, Spanish, Italian, Portuguese or Russian.
+3. **Engine.** Prefer a local model that is already installed (Qwen if there is an NVIDIA GPU, else Kokoro); use a
+   remote API if the user offers a key; if neither, ask whether to install Kokoro or to go silent. A remote key goes
+   into the environment or `demo_env.py key`, never into the story.
+
+Rule of thumb: **local if it is ready, remote if the user provides an API, no narration if none is wanted.** Claude
+Code asks with selectable options; Codex asks in plain words.
 
 ### 1. Isolate the app
 
@@ -160,9 +194,12 @@ Copy [`story_template.py`](story_template.py) and edit the top section:
 TITLE = 'Acme Inbox'
 SUBTITLE = 'Product tour'
 CHAPTERS = ['Inbox', 'Filters', 'Summary']
+LANGUAGE = 'en'             # the captions' language, and so the narration's
 VIEW = (1280, 620)          # 64:31, required
 DENSITY = 2.5
 PORT = 8799
+
+VOICE = {'engine': 'kokoro', 'speaker': 'af_maple'}   # narration: engine and voice; leave it out for a silent video
 
 def launch(work, port):
     return {
@@ -248,7 +285,21 @@ $PY scripts/demo_voice.py --work /tmp/demo-work
 ```
 
 The narration goes under every caption, in one voice. Each line is generated several times, checked by a speech
-recogniser, fitted into its caption's time window, and levelled. The silent picture is copied untouched.
+recogniser, fitted into its caption's time window, and levelled. The silent picture is copied untouched. The output
+is `<name>-配音版.mp4` for Mandarin and `<name>-narrated.mp4` for the other languages.
+
+The engine comes from `VOICE['engine']` or `work/voice/settings.json`:
+
+| Engine | Needs | Notes |
+| --- | --- | --- |
+| `qwen` | NVIDIA GPU, the two Qwen models | best quality; one fixed voice cloned from a reference clip; nine built-in speakers; not macOS |
+| `kokoro` | `demo_env.py setup --kokoro` | any CPU, Windows/macOS included; Chinese and English; fixed voices (no cloning) |
+| `openai` / `compatible` | a key, optional `base_url` | OpenAI's audio endpoint and the services that copy it |
+| `elevenlabs` | a key and a voice id | multilingual models |
+| `dashscope` | an Alibaba Cloud key | Qwen-TTS, 48 voices, no speed parameter |
+
+Kokoro skips English words its lexicon does not have — the anchor step lists them, and `say` writes how they sound.
+See [`references/engines.md`](references/engines.md).
 
 The final check verifies the file, line positions, voice consistency, loudness and that no sound sits outside a
 caption. See [`references/narration.md`](references/narration.md) for changing the voice, pronunciation fixes
@@ -261,6 +312,7 @@ caption. See [`references/narration.md`](references/narration.md) for changing t
 | Caption text, marks, camera, order | `demo_record.py` → `demo_render.py` → `demo_voice.py` |
 | Only caption/mark timing in `timeline.json` | `demo_render.py` (recording will overwrite it) |
 | Narration settings only | `demo_voice.py build`, then `check` |
+| Engine, voice or language | `demo_voice.py anchor` (or delete `work/voice`), then the whole narration |
 | One badly spoken line | delete its takes in `work/voice/takes`, then `demo_voice.py takes N` |
 | Different reference voice | `demo_voice.py anchor NAME`, then `demo_voice.py` |
 
@@ -292,7 +344,8 @@ Coordinates are CSS pixels; the renderer scales them to 1080p. All placements an
 | Command | Purpose |
 | --- | --- |
 | `python3 scripts/demo_env.py` | check the machine |
-| `python3 scripts/demo_env.py setup [--models]` | create the skill's Python; optionally fetch check models |
+| `python3 scripts/demo_env.py setup [--models] [--kokoro]` | create the skill's Python; optionally fetch check models / Kokoro |
+| `python3 scripts/demo_env.py key provider=…` / `--list` | remember / show remote keys (never in the story) |
 | `python3 scripts/demo_env.py set name=path ...` | remember where a tool or model is |
 | `demo_record.py --story S --work W [--quick]` | record frames + timeline |
 | `demo_render.py --work W --check` | check the timeline in numbers |
@@ -304,14 +357,14 @@ Coordinates are CSS pixels; the renderer scales them to 1080p. All placements an
 
 ```
 work/
-├── timeline.json        camera, marks, captions, cursor, chapters, facts, clock
+├── timeline.json        camera, marks, captions, cursor, chapters, facts, clock, language
 ├── frames/              recorded page frames (JPEG)
 ├── server.log           the throwaway app's output
 ├── render.json          what the renderer wrote and checked
 ├── demo.mp4             silent video
 └── voice/
     ├── anchor/          candidate reference clips
-    ├── anchor.wav       the chosen reference
+    ├── anchor.wav       the chosen reference (every engine has one: it fixes the voice check and the pace)
     ├── trial/           trial clips per candidate
     ├── takes/           every take of every line (+ measurements)
     ├── final/           each line cut from the finished file
@@ -334,6 +387,8 @@ The silent video's name is what you passed to `--out`; the narrated one is its n
 | Labels cover text | change `place`, use `pin`, or move the camera |
 | `字体里没有这些字符` | install Noto Sans CJK or set `DEMO_FONT_*` |
 | Narration line too tight | shorten that caption or give it more screen time, then record again |
+| `Kokoro 的词表里没有这些词` | write how they sound in `VOICE['say']` (e.g. `"API": "A P I"`), or use Qwen / a remote engine |
+| A remote service answers 401 | wrong key: `demo_env.py key --list`, set it again |
 | `显存不够` | close other GPU programs; about 6.5 GB free is needed |
 | Voice sounds different between lines | delete `work/voice` and rerun; or choose another `anchor` |
 
@@ -343,7 +398,9 @@ The silent video's name is what you passed to `--out`; the narrated one is its n
   the video and in `work/frames/`.
 - **Do not commit work folders** — they contain page screenshots, excerpts of your data and the absolute story
   path in `timeline.json`. The bundled `.gitignore` excludes common output paths.
-- **No audio or video is uploaded.** Narration runs locally on your GPU; verification models run locally.
+- **Local engines upload nothing.** Qwen and Kokoro run on your machine; so do the verification models.
+- **A remote engine receives the caption text of every line** for synthesis. Keys stay local (environment or
+  `secrets.json`, mode 600). Use a local engine or no narration if that matters.
 - **Check before publishing.** Watch the final file once; the numeric checks cannot tell you that a customer
   name should not have been on screen.
 
@@ -352,13 +409,18 @@ The silent video's name is what you passed to `--out`; the narrated one is its n
 **Does it work with any web app?** Any app Chromium can open and that can run as a separate instance with
 demo data. Apps behind login work too: put the login flow in the story (or use a dedicated demo account).
 
-**Can the narration be English?** The video, captions and marks support English text, but the bundled voice
-is Mandarin Qwen3-TTS. English narration needs a different TTS step.
+**Can the narration be English?** Yes: `LANGUAGE = 'en'`, and all three engines speak English. Kokoro's English
+voices are `af_maple`, `af_sol`, `bf_vale`. Japanese, Korean and the rest come from Qwen or a remote engine.
 
-**Does it need a GPU?** Only for narration. Recording, rendering and all picture checks are CPU-only.
+**Does it need a GPU?** Only the Qwen engine. Recording, rendering, Kokoro narration and all picture checks are
+CPU-only.
 
-**Windows?** Not tested. The code has Windows-aware paths (`Scripts`, Edge) but expect rough edges; Linux is
-the supported platform.
+**Can I skip the narration?** Yes. Do not run `demo_voice.py`; the silent video is the deliverable, and captions are
+still timed by the chosen language's reading speed.
+
+**Windows and macOS?** Yes. Windows process handling (`taskkill /T`), Chrome/Edge paths and Microsoft YaHei, and
+macOS PingFang on Apple Silicon are handled. Full regression testing has been on Linux. The Qwen engine needs NVIDIA
+CUDA, so on macOS use Kokoro or a remote service.
 
 **Why Python and not a GUI?** A story is diffable, reviewable and repeatable. The same story produces the same
 video after a UI change; a manual screen recording does not.
