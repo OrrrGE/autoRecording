@@ -4,7 +4,9 @@
 
 这是一个 [Claude Code](https://claude.com/claude-code) 技能，也是一组可以直接运行的 Python 脚本：在无头浏览器里操作应用、录制画面，按分镜合成 1080p60 视频，配上稳定的普通话解说，再用数字指标核验成片。不需要录屏软件，不需要手工剪辑，也不上传到任何云服务。
 
-[English](README.md) · [工作原理](#工作原理) · [快速开始](#快速开始) · [使用教程](#使用教程)
+[English](README.en.md) · [▶ 观看 1 分钟演示](https://orrrge.github.io/autoDemoRecordingSkill/#demo) ·
+[交互式页面](https://orrrge.github.io/autoDemoRecordingSkill/) · [README](README.md) ·
+[工作原理](#工作原理) · [快速开始](#快速开始) · [使用教程](#使用教程)
 
 ---
 

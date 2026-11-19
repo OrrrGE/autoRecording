@@ -25,3 +25,6 @@ models/
 .idea/
 .vscode/
 *.log
+
+# The repository's own demo media (keep this one video)
+!docs/media/demo-1min.mp4
