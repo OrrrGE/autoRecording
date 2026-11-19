@@ -24,8 +24,8 @@ A single MP4 that looks like a produced product tour, not a raw screen capture:
 - **Off-page notes** — downloads, OS dialogs and other things the page cannot show.
 - **Mandarin narration** in one consistent voice, fitted to each caption, with speech and speaker verification.
 
-The recording itself is lossless in structure: page frames and a `timeline.json` are kept separately, so
-captions, marks and timing can be re-rendered without recording again.
+Page frames and a `timeline.json` are kept separately, so captions, marks and timing can be re-rendered
+without recording again.
 
 ## How it works
 
@@ -105,7 +105,14 @@ creates lives in `~/.cache/auto-demo-recording` (`AUTO_DEMO_HOME` overrides it).
 ## Quick start
 
 Run the built-in self-test: a small to-do page that exercises every feature. It needs no app, no data and no
-GPU for the first three commands.
+GPU for the first three commands. If you have not installed the skill's Python yet:
+
+```bash
+cd ~/.claude/skills/autoDemoRecordingSkill
+python3 scripts/demo_env.py setup
+```
+
+Then:
 
 ```bash
 cd ~/.claude/skills/autoDemoRecordingSkill

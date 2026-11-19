@@ -90,7 +90,14 @@ python3 scripts/demo_env.py setup    # 创建技能自己的 Python 和依赖
 
 ## 快速开始
 
-先用自检页面跑通整条流程。它不依赖任何应用和数据；前三条命令不需要 GPU。
+先用自检页面跑通整条流程。它不依赖任何应用和数据；前三条命令不需要 GPU。如果还没装技能自己的 Python：
+
+```bash
+cd ~/.claude/skills/autoDemoRecordingSkill
+python3 scripts/demo_env.py setup
+```
+
+然后：
 
 ```bash
 cd ~/.claude/skills/autoDemoRecordingSkill
