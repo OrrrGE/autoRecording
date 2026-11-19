@@ -1,17 +1,17 @@
 <div align="center">
 
-# autoDemoRecordingSkill
+# autoRecording
 
 **Record a polished, narrated demo video of a web app — from one Python story file.**
 **用一个 Python 分镜文件，把 Web 应用做成带解说的演示视频。**
 
-<a href="https://orrrge.github.io/autoDemoRecordingSkill/">
+<a href="https://orrrge.github.io/autoRecording/">
   <img src="docs/media/demo-poster.png" alt="1-minute demo — click to watch" width="920">
 </a>
 
 <sub>▶ 1 分钟演示 · 示例：督办证据工作台（任务、部门、材料均为模拟数据） · <a href="docs/media/demo-1min.mp4">直接播放 MP4</a></sub>
 
-[交互式页面（中英文切换 + 在线视频）](https://orrrge.github.io/autoDemoRecordingSkill/) ·
+[交互式页面（中英文切换 + 在线视频）](https://orrrge.github.io/autoRecording/) ·
 [完整中文教程](README.zh-CN.md) ·
 [Full English guide](README.en.md) ·
 [MIT](LICENSE)
@@ -38,7 +38,7 @@ and check the result.
 ### Install and quick start
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 cd ~/.claude/skills/autoDemoRecordingSkill
 python3 scripts/demo_env.py setup
@@ -79,7 +79,7 @@ Narration options: [`references/narration.md`](references/narration.md). Install
 ### 安装与快速开始
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 cd ~/.claude/skills/autoDemoRecordingSkill
 python3 scripts/demo_env.py setup
@@ -107,5 +107,5 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest      # 需要显卡和语音
 ---
 
 <div align="center">
-<sub>MIT · <a href="https://github.com/OrrrGE/autoDemoRecordingSkill">GitHub</a> · <a href="https://orrrge.github.io/autoDemoRecordingSkill/">交互式页面</a></sub>
+<sub>MIT · <a href="https://github.com/OrrrGE/autoRecording">GitHub</a> · <a href="https://orrrge.github.io/autoRecording/">交互式页面</a></sub>
 </div>

@@ -1,4 +1,4 @@
-# autoDemoRecordingSkill
+# autoRecording
 
 **Turn a web app into a polished, narrated demo video — from a Python story file.**
 
@@ -7,8 +7,8 @@ records a web app in a headless browser, draws a professional 1080p60 video arou
 narration, and verifies the result numerically — no screen-recording software, no manual editing, no cloud
 services.
 
-[中文说明](README.zh-CN.md) · [▶ 1-minute demo](https://orrrge.github.io/autoDemoRecordingSkill/#demo-en) ·
-[Interactive page](https://orrrge.github.io/autoDemoRecordingSkill/) · [README](README.md) ·
+[中文说明](README.zh-CN.md) · [▶ 1-minute demo](https://orrrge.github.io/autoRecording/#demo-en) ·
+[Interactive page](https://orrrge.github.io/autoRecording/) · [README](README.md) ·
 [How it works](#how-it-works) · [Quick start](#quick-start) · [Tutorial](#tutorial)
 
 ---
@@ -85,7 +85,7 @@ video. Full setup details: [`references/environment.md`](references/environment.
 ### As a Claude Code skill
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 ```
 
@@ -95,8 +95,8 @@ the pipeline. You can also run every script yourself — the skill is just a dir
 ### As plain scripts
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill
-cd autoDemoRecordingSkill
+git clone https://github.com/OrrrGE/autoRecording
+cd autoRecording
 python3 scripts/demo_env.py          # read-only: what is present, what is missing
 python3 scripts/demo_env.py setup    # create the skill's Python and packages
 ```

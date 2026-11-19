@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>autoDemoRecordingSkill · 自动演示录制</title>
+<title>autoRecording · 自动演示录制</title>
 <meta name="description" content="A Claude Code skill that records, renders and narrates polished demo videos of web apps. 用一个 Python 分镜文件，把 Web 应用做成带解说的演示视频。">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
@@ -137,7 +137,7 @@
 
 <header>
   <div class="wrap bar">
-    <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span><span class="name">autoDemoRecordingSkill</span> <small>· demo videos, scripted</small></a>
+    <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span><span class="name">autoRecording</span> <small>· demo videos, scripted</small></a>
     <nav class="lang-switch" aria-label="Language / 语言">
       <button type="button" data-lang="zh" aria-pressed="true">中文</button>
       <button type="button" data-lang="en" aria-pressed="false">English</button>
@@ -155,7 +155,7 @@
       <p class="lead">写一个 Python 分镜文件，自动完成录制、1080p60 渲染、普通话配音和逐项核验。不需要录屏软件，不需要手工剪辑，也不上传到云端。</p>
       <div class="actions">
         <a class="btn primary" href="#demo">观看 1 分钟演示</a>
-        <a class="btn" href="https://github.com/OrrrGE/autoDemoRecordingSkill">GitHub 仓库</a>
+        <a class="btn" href="https://github.com/OrrrGE/autoRecording">GitHub 仓库</a>
       </div>
       <ul class="meta">
         <li>1920×1080 · 60 fps</li>
@@ -204,7 +204,7 @@
 
     <section>
       <div class="section-head"><span class="kicker">Start</span><h2>快速开始</h2></div>
-      <pre><code>git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+      <pre><code>git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 cd ~/.claude/skills/autoDemoRecordingSkill
 python3 scripts/demo_env.py setup
@@ -281,12 +281,12 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
     <section>
       <div class="section-head"><span class="kicker">Docs</span><h2>文档</h2></div>
       <div class="links">
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/README.zh-CN.md"><b>中文完整教程</b><span>安装、story API、配音、排错</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/SKILL.md"><b>SKILL.md</b><span>Claude Code 技能入口与流程</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/director.md"><b>Story API</b><span>镜头、标注、步骤、滚动、下载</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/narration.md"><b>配音指南</b><span>换音色、念法修正、时长贴合</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/environment.md"><b>环境安装</b><span>ffmpeg、Chromium、CUDA、模型</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill"><b>GitHub</b><span>源码、Issues、更新</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/README.zh-CN.md"><b>中文完整教程</b><span>安装、story API、配音、排错</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/SKILL.md"><b>SKILL.md</b><span>Claude Code 技能入口与流程</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/director.md"><b>Story API</b><span>镜头、标注、步骤、滚动、下载</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/narration.md"><b>配音指南</b><span>换音色、念法修正、时长贴合</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/environment.md"><b>环境安装</b><span>ffmpeg、Chromium、CUDA、模型</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording"><b>GitHub</b><span>源码、Issues、更新</span></a>
       </div>
     </section>
   </div>
@@ -299,7 +299,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
       <p class="lead">Write one Python story file. The pipeline records the app, renders a 1080p60 video, adds a Mandarin narration, and verifies the result numerically. No screen recorder, no manual editing, no cloud upload.</p>
       <div class="actions">
         <a class="btn primary" href="#demo-en">Watch the 1-minute demo</a>
-        <a class="btn" href="https://github.com/OrrrGE/autoDemoRecordingSkill">GitHub repository</a>
+        <a class="btn" href="https://github.com/OrrrGE/autoRecording">GitHub repository</a>
       </div>
       <ul class="meta">
         <li>1920×1080 · 60 fps</li>
@@ -348,7 +348,7 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
 
     <section>
       <div class="section-head"><span class="kicker">Start</span><h2>Quick start</h2></div>
-      <pre><code>git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+      <pre><code>git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 cd ~/.claude/skills/autoDemoRecordingSkill
 python3 scripts/demo_env.py setup
@@ -425,12 +425,12 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
     <section>
       <div class="section-head"><span class="kicker">Docs</span><h2>Documentation</h2></div>
       <div class="links">
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/README.en.md"><b>Full English guide</b><span>Install, story API, narration, troubleshooting</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/SKILL.md"><b>SKILL.md</b><span>The Claude Code skill entry point</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/director.md"><b>Story API</b><span>Camera, marks, steps, scrolling, downloads</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/narration.md"><b>Narration guide</b><span>Voices, pronunciation, fitting</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill/blob/main/references/environment.md"><b>Environment</b><span>ffmpeg, Chromium, CUDA, models</span></a>
-        <a class="link-card" href="https://github.com/OrrrGE/autoDemoRecordingSkill"><b>GitHub</b><span>Source, issues, updates</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/README.en.md"><b>Full English guide</b><span>Install, story API, narration, troubleshooting</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/SKILL.md"><b>SKILL.md</b><span>The Claude Code skill entry point</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/director.md"><b>Story API</b><span>Camera, marks, steps, scrolling, downloads</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/narration.md"><b>Narration guide</b><span>Voices, pronunciation, fitting</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording/blob/main/references/environment.md"><b>Environment</b><span>ffmpeg, Chromium, CUDA, models</span></a>
+        <a class="link-card" href="https://github.com/OrrrGE/autoRecording"><b>GitHub</b><span>Source, issues, updates</span></a>
       </div>
     </section>
   </div>
@@ -439,8 +439,8 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest</code></pre>
 
 <footer>
   <div class="wrap">
-    <span>autoDemoRecordingSkill · MIT</span>
-    <span>Built for Claude Code · <a href="https://github.com/OrrrGE/autoDemoRecordingSkill">GitHub</a></span>
+    <span>autoRecording · MIT</span>
+    <span>Built for Claude Code · <a href="https://github.com/OrrrGE/autoRecording">GitHub</a></span>
   </div>
 </footer>
 

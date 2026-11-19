@@ -3,7 +3,7 @@ name: autoDemoRecordingSkill
 description: Record a polished, narrated demo video of a web app automatically. Drives the app in headless Chromium from a story file, records clicks/typing/scrolls, renders a 1920x1080 60fps video with camera moves, highlights, numbered steps, captions and chapters, then adds a stable Mandarin narration with local Qwen3-TTS and verifies picture and sound numerically. Use when asked to make a product demo video, screen recording, walkthrough, feature tour, or narrated screencast of a web app.
 ---
 
-# Auto Demo Recording
+# autoRecording
 
 Turn a web app into a finished, narrated demo video. You write a **story file** that says what to show and
 what to say; the scripts do the recording, drawing, encoding, narration and checking.

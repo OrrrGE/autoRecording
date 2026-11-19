@@ -1,11 +1,11 @@
-# autoDemoRecordingSkill
+# autoRecording
 
 **用一个 Python 脚本文件，把 Web 应用自动做成带解说的演示视频。**
 
 这是一个 [Claude Code](https://claude.com/claude-code) 技能，也是一组可以直接运行的 Python 脚本：在无头浏览器里操作应用、录制画面，按分镜合成 1080p60 视频，配上稳定的普通话解说，再用数字指标核验成片。不需要录屏软件，不需要手工剪辑，也不上传到任何云服务。
 
-[English](README.en.md) · [▶ 观看 1 分钟演示](https://orrrge.github.io/autoDemoRecordingSkill/#demo) ·
-[交互式页面](https://orrrge.github.io/autoDemoRecordingSkill/) · [README](README.md) ·
+[English](README.en.md) · [▶ 观看 1 分钟演示](https://orrrge.github.io/autoRecording/#demo) ·
+[交互式页面](https://orrrge.github.io/autoRecording/) · [README](README.md) ·
 [工作原理](#工作原理) · [快速开始](#快速开始) · [使用教程](#使用教程)
 
 ---
@@ -73,7 +73,7 @@ flowchart LR
 ### 作为 Claude Code 技能
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
+git clone https://github.com/OrrrGE/autoRecording \
     ~/.claude/skills/autoDemoRecordingSkill
 ```
 
@@ -82,8 +82,8 @@ git clone https://github.com/OrrrGE/autoDemoRecordingSkill \
 ### 只用脚本
 
 ```bash
-git clone https://github.com/OrrrGE/autoDemoRecordingSkill
-cd autoDemoRecordingSkill
+git clone https://github.com/OrrrGE/autoRecording
+cd autoRecording
 python3 scripts/demo_env.py          # 只读：检查有什么、缺什么
 python3 scripts/demo_env.py setup    # 创建技能自己的 Python 和依赖
 ```
