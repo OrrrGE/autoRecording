@@ -18,9 +18,6 @@
 
 </div>
 
-> GitHub 的 README 不支持脚本和内嵌视频，所以**真正的按钮切换与在线播放**放在
-> **[交互式页面](https://orrrge.github.io/autoDemoRecordingSkill/)**。
-> 下面的中文 / English 在同一个 README 内展开、收起，不会跳转到其他页面。
 
 <details name="language">
 <summary><b>English</b> · click to switch</summary>
