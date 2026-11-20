@@ -116,6 +116,10 @@ $PY scripts/demo_voice.py --work /tmp/demo-selftest      # 可选：有显卡用
 
 ---
 
+## 致谢
+
+感谢 [Linux Do 社区](https://linux.do/) 的交流、反馈与支持 · Thanks to the [Linux Do community](https://linux.do/).
+
 <div align="center">
 <sub>MIT · <a href="https://github.com/OrrrGE/autoRecording">GitHub</a> · <a href="https://orrrge.github.io/autoRecording/">交互式页面</a></sub>
 </div>

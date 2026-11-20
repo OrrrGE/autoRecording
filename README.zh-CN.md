@@ -380,3 +380,7 @@ work/
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
+
+## 致谢
+
+感谢 [Linux Do 社区](https://linux.do/) 的交流、反馈与支持。

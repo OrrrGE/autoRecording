@@ -428,3 +428,7 @@ video after a UI change; a manual screen recording does not.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Acknowledgements
+
+Thanks to the [Linux Do community](https://linux.do/) for the discussion, feedback and support.
