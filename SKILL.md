@@ -1,6 +1,26 @@
 ---
 name: autoDemoRecordingSkill
 description: Record a polished demo video of a web app automatically, with or without narration. Drives the app in headless Chromium from a story file, records clicks/typing/scrolls, renders a 1920x1080 60fps video with camera moves, highlights, numbered steps, captions and chapters, then adds a narration in the chosen language — local Qwen3-TTS on an NVIDIA GPU, local Kokoro on any CPU, or a remote API (OpenAI-compatible, ElevenLabs, Alibaba DashScope) — and verifies picture and sound numerically. Works on Linux, Windows and macOS, and under Claude Code or Codex. Use when asked to make a product demo video, screen recording, walkthrough, feature tour, or narrated screencast of a web app.
+external_urls:
+  - https://api.openai.com
+  - https://api.elevenlabs.io
+  - https://dashscope.aliyuncs.com
+  - https://dashscope-intl.aliyuncs.com
+  - https://huggingface.co
+  - https://hf-mirror.com
+  - https://pypi.org
+  - https://files.pythonhosted.org
+  - https://download.pytorch.org
+  - https://playwright.azureedge.net
+  - https://github.com
+tags:
+  - demo-video
+  - screen-recording
+  - playwright
+  - text-to-speech
+  - claude-code
+  - codex
+license: MIT
 ---
 
 # autoRecording
